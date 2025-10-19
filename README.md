@@ -13,8 +13,6 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
-
 The objective of this system is to create a gamified task manager that helps users stay productive while maintaining a healthy work-life balance. This will be achieved by allowing users to nurture the digital pet through completing daily or weekly tasks in different categories such as work, exercise, and hobbies. The primary benefit of the system is to make productivity more enjoyable and motivating, helping students and young professionals overcome procrastination and build lasting habits through an interactive and social experience. 
 
 
@@ -37,21 +35,6 @@ This section should list any major frameworks/libraries used to bootstrap your p
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-
-
-<!-- GETTING STARTED -->
-## Getting Started
-
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
-
-### Prerequisites
-
-This is an example of how to list things you need to use the software and how to install them.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
