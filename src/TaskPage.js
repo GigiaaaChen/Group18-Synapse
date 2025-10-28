@@ -17,13 +17,21 @@ function TaskPage({ tasks, setTasks }) {
       id: Date.now(),
       title: taskTitle,
       dueDate: taskDate,
-      category: taskCategory
+      category: taskCategory,
+      completed: false,
+      progress: 0
     };
 
     setTasks([...tasks, newTask]);
     setTaskTitle('');
     setTaskDate('');
     setTaskCategory('personal');
+  };
+
+  const toggleTask = (id) => {
+  setTasks(prev =>
+    prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t)
+  );
   };
 
   const deleteTask = (id) => {
@@ -158,46 +166,67 @@ function TaskPage({ tasks, setTasks }) {
           ) : (
             tasks.map(task => (
               <div 
-                key={task.id} 
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '15px',
-                  backgroundColor: '#fafafa',
-                  borderRadius: '8px',
-                  borderLeft: `4px solid ${getCategoryColor(task.category)}`,
-                  gap: '15px'
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', color: '#333' }}>
-                    {task.title}
-                  </h3>
-                  <div style={{ display: 'flex', gap: '15px', fontSize: '14px' }}>
-                    <span style={{ color: '#666', textTransform: 'capitalize', fontWeight: 'bold' }}>
-                      {task.category}
-                    </span>
-                    {task.dueDate && (
-                      <span style={{ color: '#999' }}>Due: {task.dueDate}</span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => deleteTask(task.id)}
-                  style={{
-                    backgroundColor: '#f44336',
-                    color: 'white',
-                    border: 'none',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
+  key={task.id}
+  style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '15px',
+    backgroundColor: '#fafafa',
+    borderRadius: '8px',
+    borderLeft: `4px solid ${getCategoryColor(task.category)}`,
+    gap: '15px',
+    opacity: task.completed ? 0.6 : 1
+  }}
+>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+    <input
+      type="checkbox"
+      checked={task.completed}
+      onChange={() => toggleTask(task.id)}
+      aria-label={`Mark ${task.title} as ${task.completed ? 'incomplete' : 'complete'}`}
+    />
+    <div style={{ flex: 1 }}>
+      <h3
+        style={{
+          margin: '0 0 8px 0',
+          fontSize: '18px',
+          color: task.completed ? '#777' : '#333',
+          textDecoration: task.completed ? 'line-through' : 'none'
+        }}
+      >
+        {task.title}
+      </h3>
+      <div style={{ display: 'flex', gap: '15px', fontSize: '14px' }}>
+        <span style={{ color: '#666', textTransform: 'capitalize', fontWeight: 'bold' }}>
+          {task.category}
+        </span>
+        {task.dueDate && <span style={{ color: '#999' }}>Due: {task.dueDate}</span>}
+        {task.completed && (
+          <span style={{ padding: '2px 6px', borderRadius: 4, background: '#e8f5e9' }}>
+            Completed
+          </span>
+        )}
+      </div>
+    </div>
+  </div>
+
+  <button
+    onClick={() => deleteTask(task.id)}
+    style={{
+      backgroundColor: '#f44336',
+      color: 'white',
+      border: 'none',
+      padding: '8px 16px',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontSize: '14px'
+    }}
+  >
+    Delete
+  </button>
+</div>
+
             ))
           )}
         </div>
