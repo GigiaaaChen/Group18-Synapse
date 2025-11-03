@@ -31,7 +31,7 @@ Linear: https://linear.app/ece344/team/ECE/active
   <li><strong>Next.js (TypeScript)</strong> — for building fast, server-rendered pages and API routes</li>
   <li><strong>React</strong> — for dynamic, component-based UI</li>
   <li><strong>Tailwind CSS</strong> — for responsive and modern styling</li>
-  <li><strong>PostgreSQL</strong> for managing user data and tasks</li>
+  <li><strong>Prisma</strong>  — for managing user data and tasks</li>
 </ul>
 
 <h2>Features</h2>
