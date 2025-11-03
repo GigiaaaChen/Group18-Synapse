@@ -26,7 +26,30 @@ Linear: https://linear.app/ece344/team/ECE/active
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<h2>Built With</h2>
+<ul>
+  <li><strong>Next.js (TypeScript)</strong> — for building fast, server-rendered pages and API routes</li>
+  <li><strong>React</strong> — for dynamic, component-based UI</li>
+  <li><strong>Tailwind CSS</strong> — for responsive and modern styling</li>
+  <li><strong>PostgreSQL</strong> for managing user data and tasks</li>
+</ul>
 
+<h2>Features</h2>
+
+<h3>🧑‍💻 Sign Up &amp; Authentication</h3>
+<ul>
+  <li>Users can easily create an account by signing up with their email and password.</li>
+  <li>After registration, they are redirected to their task dashboard. Authentication ensures each user’s tasks and pet progress are stored securely.</li>
+</ul>
+
+<h3>✅ Task Planning &amp; Management</h3>
+<ul>
+  <li>Plan upcoming tasks for future dates to stay organized throughout the week.</li>
+  <li>Set daily or weekly goals by category and track progress visually to maintain a balanced routine.</li>
+  <li>Review and reschedule unfinished tasks to stay on track without losing progress.</li>
+  <li>Once logged in, users can add, edit, and delete tasks across categories such as <em>Work</em>, <em>Exercise</em>, and <em>Hobbies</em>.</li>
+  <li>Completing tasks rewards the digital pet, promoting consistent productivity through gamification.</li>
+</ul>
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
