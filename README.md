@@ -34,6 +34,23 @@ Linear: https://linear.app/ece344/team/ECE/active
   <li><strong>PostgreSQL</strong> for managing user data and tasks</li>
 </ul>
 
+<h2>Set up Instructions</h2>
+
+<h3>Prerequisites</h3>
+<ul>
+  <li>Node.js</li>
+  <li>npm</li>
+</ul>
+<h3>Setup</h3>
+<ul>
+  <li>Install Dependencies using <em>npm install</em></li>
+</ul>
+<h3>Development</h3>
+<ul>
+  <li>Run command <em>npm run dev</em> to start the dev server</li>
+  <li>App will be available at http://localhost:3000</li>
+</ul>
+
 <h2>Features</h2>
 
 <h3>🧑‍💻 Sign Up &amp; Authentication</h3>
