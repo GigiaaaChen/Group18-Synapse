@@ -1,10 +1,7 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import Link from 'next/link';
 
-function WelcomePage() {
-  const navigate = useNavigate();
-
-  const containerStyle = {
+export default function Home() {
+  const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     display: 'flex',
@@ -14,7 +11,7 @@ function WelcomePage() {
     fontFamily: 'Arial, sans-serif'
   };
 
-  const boxStyle = {
+  const boxStyle: React.CSSProperties = {
     backgroundColor: 'white',
     padding: '60px 40px',
     borderRadius: '20px',
@@ -23,19 +20,19 @@ function WelcomePage() {
     maxWidth: '500px'
   };
 
-  const titleStyle = {
+  const titleStyle: React.CSSProperties = {
     fontSize: '32px',
     color: '#333',
     marginBottom: '10px'
   };
 
-  const subtitleStyle = {
+  const subtitleStyle: React.CSSProperties = {
     fontSize: '18px',
     color: '#666',
     marginBottom: '30px'
   };
 
-  const buttonStyle = {
+  const buttonStyle: React.CSSProperties = {
     backgroundColor: '#667eea',
     color: 'white',
     border: 'none',
@@ -43,7 +40,9 @@ function WelcomePage() {
     fontSize: '18px',
     borderRadius: '30px',
     cursor: 'pointer',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    display: 'inline-block',
+    textDecoration: 'none'
   };
 
   return (
@@ -51,15 +50,10 @@ function WelcomePage() {
       <div style={boxStyle}>
         <h1 style={titleStyle}>🐾 Tamagotchi Task Manager</h1>
         <p style={subtitleStyle}>Keep your tasks alive and happy!</p>
-        <button 
-          style={buttonStyle}
-          onClick={() => navigate('/tasks')}
-        >
+        <Link href="/tasks" style={buttonStyle}>
           Add Tasks
-        </button>
+        </Link>
       </div>
     </div>
   );
 }
-
-export default WelcomePage;

@@ -1,65 +1,44 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+'use client';
 
-function TaskPage({ tasks, setTasks }) {
-  const navigate = useNavigate();
+import React, { useState } from "react";
+import Link from "next/link";
+import { useTaskStore } from "@/stores/taskStore";
+
+export default function TaskPage() {
+  const tasks = useTaskStore((state) => state.tasks);
+  const addTask = useTaskStore((state) => state.addTask);
+  const updateTaskProgress = useTaskStore(
+    (state) => state.updateTaskProgress,
+  );
+  const toggleTask = useTaskStore((state) => state.toggleTask);
+  const deleteTask = useTaskStore((state) => state.deleteTask);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDate, setTaskDate] = useState("");
   const [taskCategory, setTaskCategory] = useState("personal");
   const [newProgress, setNewProgress] = useState(0);
 
-  const addTask = () => {
+  const handleAddTask = () => {
     if (taskTitle.trim() === "") {
       alert("Please enter a task title!");
       return;
     }
 
-    const newTask = {
-      id: Date.now(),
+    addTask({
       title: taskTitle,
       dueDate: taskDate,
       category: taskCategory,
       completed: false,
       progress: newProgress,
-    };
+    });
 
-    setTasks([...tasks, newTask]);
     setTaskTitle("");
     setTaskDate("");
     setTaskCategory("personal");
-  };
-  const updateTaskProgress = (id, value) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              progress: value,
-              completed: value === 100 ? true : t.completed,
-            }
-          : t
-      )
-    );
-  };
-  const toggleTask = (id) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        const nextCompleted = !t.completed;
-        return {
-          ...t,
-          completed: nextCompleted,
-          progress: nextCompleted ? 100 : 0, // uncheck → 0%
-        };
-      })
-    );
-  };
-  const deleteTask = (id) => {
-    setTasks(tasks.filter((task) => task.id !== id));
+    setNewProgress(0);
   };
 
-  const getCategoryColor = (category) => {
-    const colors = {
+  const getCategoryColor = (category: string) => {
+    const colors: Record<string, string> = {
       personal: "#4CAF50",
       work: "#2196F3",
       health: "#FF9800",
@@ -68,7 +47,7 @@ function TaskPage({ tasks, setTasks }) {
     return colors[category] || "#gray";
   };
 
-  const containerStyle = {
+  const containerStyle: React.CSSProperties = {
     minHeight: "100vh",
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     display: "flex",
@@ -78,7 +57,7 @@ function TaskPage({ tasks, setTasks }) {
     fontFamily: "Arial, sans-serif",
   };
 
-  const taskBoxStyle = {
+  const taskBoxStyle: React.CSSProperties = {
     backgroundColor: "white",
     padding: "40px",
     borderRadius: "20px",
@@ -92,7 +71,8 @@ function TaskPage({ tasks, setTasks }) {
   return (
     <div style={containerStyle}>
       <div style={taskBoxStyle}>
-        <button
+        <Link
+          href="/"
           style={{
             backgroundColor: "#e0e0e0",
             color: "#333",
@@ -102,11 +82,12 @@ function TaskPage({ tasks, setTasks }) {
             cursor: "pointer",
             marginBottom: "20px",
             fontSize: "14px",
+            display: "inline-block",
+            textDecoration: "none",
           }}
-          onClick={() => navigate("/")}
         >
           ← Back to Welcome
-        </button>
+        </Link>
 
         <h1 style={{ fontSize: "32px", color: "#333", marginBottom: "10px" }}>
           My Tasks
@@ -164,6 +145,7 @@ function TaskPage({ tasks, setTasks }) {
             <option value="health">Health</option>
             <option value="study">Study</option>
           </select>
+
           <label style={{ fontSize: 14, color: "#666" }}>
             Progress: {newProgress}%
           </label>
@@ -175,8 +157,9 @@ function TaskPage({ tasks, setTasks }) {
             onChange={(e) => setNewProgress(Number(e.target.value))}
             style={{ width: "100%" }}
           />
+
           <button
-            onClick={addTask}
+            onClick={handleAddTask}
             style={{
               backgroundColor: "#4CAF50",
               color: "white",
@@ -327,5 +310,3 @@ function TaskPage({ tasks, setTasks }) {
     </div>
   );
 }
-
-export default TaskPage;
