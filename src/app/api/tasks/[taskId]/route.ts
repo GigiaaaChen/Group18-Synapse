@@ -36,7 +36,12 @@ export const PATCH = async (
   try {
     const { taskId } = await params;
     const user = await requireUser(request);
-    const body = (await request.json()) as Partial<Task>;
+
+    // We accept core Task fields + extra fields in body (e.g., actualDurationMinutes)
+    const body = (await request.json()) as Partial<Task> & {
+      actualDurationMinutes?: number | null;
+    };
+
     const updates: string[] = [];
     const values: Array<string | number | null | boolean> = [];
     let index = 1;
@@ -87,7 +92,9 @@ export const PATCH = async (
       values.push(body.category || "personal");
     }
 
+    // Handle completed + completedAt stamping
     if (body.completed !== undefined) {
+      const completed = Boolean(body.completed);
       updates.push(`"completed" = $${index++}`);
       values.push(Boolean(body.completed));
 
@@ -152,7 +159,7 @@ export const PATCH = async (
     const taskParamPosition = index++;
     values.push(taskId);
 
-    const result = await db.query(
+    const result = await db.query<TaskRow>(
       `
         UPDATE "task"
         SET ${updates.join(", ")}
