@@ -1,10 +1,16 @@
 export interface Task {
-  id: number;
+  id: string;
   title: string;
-  dueDate: string;
+  dueDate: string | null;
   category: string;
   completed: boolean;
   progress: number;
 }
 
-export type TaskDraft = Omit<Task, "id">;
+export interface TaskDraft {
+  title: string;
+  dueDate: string | null;
+  category: string;
+  completed: boolean;
+  progress: number;
+}

@@ -1,40 +1,74 @@
-'use client';
+"use client";
 
-import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { CSSProperties } from "react";
+import { useEffect, useState } from "react";
+import { signOut, useSession } from "@/lib/auth-client";
 import { useTaskStore } from "@/stores/taskStore";
 
 export default function TaskPage() {
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
   const tasks = useTaskStore((state) => state.tasks);
+  const isLoadingTasks = useTaskStore((state) => state.isLoading);
+  const taskError = useTaskStore((state) => state.error);
+  const fetchTasks = useTaskStore((state) => state.fetchTasks);
   const addTask = useTaskStore((state) => state.addTask);
-  const updateTaskProgress = useTaskStore(
-    (state) => state.updateTaskProgress,
-  );
+  const updateTaskProgress = useTaskStore((state) => state.updateTaskProgress);
   const toggleTask = useTaskStore((state) => state.toggleTask);
   const deleteTask = useTaskStore((state) => state.deleteTask);
+  const setError = useTaskStore((state) => state.setError);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDate, setTaskDate] = useState("");
   const [taskCategory, setTaskCategory] = useState("personal");
   const [newProgress, setNewProgress] = useState(0);
 
-  const handleAddTask = () => {
+  useEffect(() => {
+    if (!isPending && !session) {
+      router.push("/signin");
+    }
+  }, [session, isPending, router]);
+
+  const authToken = session?.session?.token;
+
+  useEffect(() => {
+    if (!authToken) return;
+    fetchTasks(authToken).catch(() => {
+      // errors are handled inside the store
+    });
+  }, [authToken, fetchTasks]);
+
+  const handleAddTask = async () => {
     if (taskTitle.trim() === "") {
       alert("Please enter a task title!");
       return;
     }
 
-    addTask({
-      title: taskTitle,
-      dueDate: taskDate,
-      category: taskCategory,
-      completed: false,
-      progress: newProgress,
-    });
+    if (!authToken) {
+      router.push("/signin");
+      return;
+    }
 
-    setTaskTitle("");
-    setTaskDate("");
-    setTaskCategory("personal");
-    setNewProgress(0);
+    try {
+      await addTask(
+        {
+          title: taskTitle,
+          dueDate: taskDate ? taskDate : null,
+          category: taskCategory,
+          completed: false,
+          progress: newProgress,
+        },
+        authToken,
+      );
+
+      setTaskTitle("");
+      setTaskDate("");
+      setTaskCategory("personal");
+      setNewProgress(0);
+    } catch {
+      // store already captured the error
+    }
   };
 
   const getCategoryColor = (category: string) => {
@@ -47,7 +81,7 @@ export default function TaskPage() {
     return colors[category] || "#gray";
   };
 
-  const containerStyle: React.CSSProperties = {
+  const containerStyle: CSSProperties = {
     minHeight: "100vh",
     background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     display: "flex",
@@ -57,7 +91,7 @@ export default function TaskPage() {
     fontFamily: "Arial, sans-serif",
   };
 
-  const taskBoxStyle: React.CSSProperties = {
+  const taskBoxStyle: CSSProperties = {
     backgroundColor: "white",
     padding: "40px",
     borderRadius: "20px",
@@ -68,30 +102,101 @@ export default function TaskPage() {
     overflow: "auto",
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/signin");
+  };
+
+  if (isPending) {
+    return (
+      <div style={containerStyle}>
+        <div style={taskBoxStyle}>
+          <h1 style={{ fontSize: "32px", color: "#333", textAlign: "center" }}>
+            Loading...
+          </h1>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return null;
+  }
+
   return (
     <div style={containerStyle}>
       <div style={taskBoxStyle}>
-        <Link
-          href="/"
+        <div
           style={{
-            backgroundColor: "#e0e0e0",
-            color: "#333",
-            border: "none",
-            padding: "8px 16px",
-            borderRadius: "8px",
-            cursor: "pointer",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
             marginBottom: "20px",
-            fontSize: "14px",
-            display: "inline-block",
-            textDecoration: "none",
           }}
         >
-          ← Back to Welcome
-        </Link>
+          <Link
+            href="/"
+            style={{
+              backgroundColor: "#e0e0e0",
+              color: "#333",
+              border: "none",
+              padding: "8px 16px",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "14px",
+              display: "inline-block",
+              textDecoration: "none",
+            }}
+          >
+            ← Back to Welcome
+          </Link>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "15px",
+            }}
+          >
+            <span style={{ color: "#666", fontSize: "14px" }}>
+              {session.user.name || session.user.email}
+            </span>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              style={{
+                backgroundColor: "#ff4757",
+                color: "white",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
 
         <h1 style={{ fontSize: "32px", color: "#333", marginBottom: "10px" }}>
           My Tasks
         </h1>
+
+        {taskError && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "12px",
+              borderRadius: "8px",
+              backgroundColor: "rgba(244, 67, 54, 0.1)",
+              color: "#c62828",
+              fontSize: "14px",
+            }}
+          >
+            {taskError}
+          </div>
+        )}
 
         <div
           style={{
@@ -146,19 +251,24 @@ export default function TaskPage() {
             <option value="study">Study</option>
           </select>
 
-          <label style={{ fontSize: 14, color: "#666" }}>
+          <label
+            htmlFor="new-task-progress"
+            style={{ fontSize: 14, color: "#666" }}
+          >
             Progress: {newProgress}%
           </label>
           <input
             type="range"
             min="0"
-            max="99"
+            max="100"
+            id="new-task-progress"
             value={newProgress}
             onChange={(e) => setNewProgress(Number(e.target.value))}
             style={{ width: "100%" }}
           />
 
           <button
+            type="button"
             onClick={handleAddTask}
             style={{
               backgroundColor: "#4CAF50",
@@ -176,7 +286,18 @@ export default function TaskPage() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-          {tasks.length === 0 ? (
+          {isLoadingTasks ? (
+            <p
+              style={{
+                textAlign: "center",
+                color: "#666",
+                fontSize: "16px",
+                padding: "40px",
+              }}
+            >
+              Loading tasks...
+            </p>
+          ) : tasks.length === 0 ? (
             <p
               style={{
                 textAlign: "center",
@@ -214,7 +335,13 @@ export default function TaskPage() {
                   <input
                     type="checkbox"
                     checked={task.completed}
-                    onChange={() => toggleTask(task.id)}
+                    onChange={() => {
+                      if (!authToken) return;
+                      setError(null);
+                      toggleTask(task.id, authToken).catch(() => {
+                        // handled by store
+                      });
+                    }}
                     aria-label={`Mark ${task.title} as ${
                       task.completed ? "incomplete" : "complete"
                     }`}
@@ -281,15 +408,30 @@ export default function TaskPage() {
                       min="0"
                       max="100"
                       value={task.progress}
-                      onChange={(e) =>
-                        updateTaskProgress(task.id, Number(e.target.value))
-                      }
+                      onChange={(e) => {
+                        if (!authToken) return;
+                        setError(null);
+                        updateTaskProgress(
+                          task.id,
+                          Number(e.target.value),
+                          authToken,
+                        ).catch(() => {
+                          // handled by store
+                        });
+                      }}
                       style={{ flex: 1 }}
                     />
                   </div>
                 )}
                 <button
-                  onClick={() => deleteTask(task.id)}
+                  type="button"
+                  onClick={() => {
+                    if (!authToken) return;
+                    setError(null);
+                    deleteTask(task.id, authToken).catch(() => {
+                      // handled by store
+                    });
+                  }}
                   style={{
                     backgroundColor: "#f44336",
                     color: "white",
