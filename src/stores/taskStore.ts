@@ -1,6 +1,19 @@
 import { create } from "zustand";
-
 import type { Task, TaskDraft } from "@/types/task";
+
+type TimeEntry = {
+  id: string;
+  taskId: string;
+  startedAt: string;
+};
+
+type HistoryEntry = {
+  id: string;
+  taskId: string;
+  startedAt: string;
+  endedAt: string;
+  durationMin: number;
+};
 
 interface TaskStore {
   tasks: Task[];
@@ -8,11 +21,7 @@ interface TaskStore {
   error: string | null;
   fetchTasks: (token: string) => Promise<void>;
   addTask: (task: TaskDraft, token: string) => Promise<void>;
-  updateTaskProgress: (
-    id: string,
-    value: number,
-    token: string,
-  ) => Promise<void>;
+  updateTaskProgress: (id: string, value: number, token: string) => Promise<void>;
   toggleTask: (id: string, token: string) => Promise<void>;
   deleteTask: (id: string, token: string) => Promise<void>;
   updateTask: (
@@ -21,9 +30,16 @@ interface TaskStore {
     token: string,
   ) => Promise<void>;
   setError: (message: string | null) => void;
+
+  activeTimer: TimeEntry | null;
+  historyByTask: Record<string, HistoryEntry[]>;
+  startTimer: (taskId: string, token?: string) => Promise<void>;
+  stopTimer: (token?: string) => Promise<void>;
+  fetchTaskHistory: (taskId: string, token?: string) => Promise<void>;
 }
 
 const API_BASE = "/api/tasks";
+const TIME_API_BASE = "/api/time_entries";
 
 const withAuth = (token: string, extra: HeadersInit = {}) => ({
   Authorization: `Bearer ${token}`,
@@ -48,21 +64,19 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   fetchTasks: async (token) => {
     set({ isLoading: true, error: null });
-
     try {
       const response = await fetch(API_BASE, {
         method: "GET",
         headers: withAuth(token),
         cache: "no-store",
+        credentials: "include",
       });
-
       if (!response.ok) {
         const { error } = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
         throw new Error(error || "Failed to load tasks");
       }
-
       const data = (await response.json()) as Task[];
       set({ tasks: data.map(parseTask), isLoading: false, error: null });
     } catch (error) {
@@ -83,15 +97,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         method: "POST",
         headers: withAuth(token, { "Content-Type": "application/json" }),
         body: JSON.stringify(task),
+        credentials: "include",
       });
-
       if (!response.ok) {
         const { error } = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
         throw new Error(error || "Failed to create task");
       }
-
       const created = parseTask(await response.json());
       set((state) => ({
         tasks: [...state.tasks, created],
@@ -115,7 +128,6 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   toggleTask: async (id, token) => {
     const task = get().tasks.find((item) => item.id === id);
     if (!task) return;
-
     const nextCompleted = !task.completed;
     const progress = nextCompleted ? 100 : 0;
     await get().updateTask(id, { completed: nextCompleted, progress }, token);
@@ -127,15 +139,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       const response = await fetch(`${API_BASE}/${id}`, {
         method: "DELETE",
         headers: withAuth(token),
+        credentials: "include",
       });
-
       if (!response.ok) {
         const { error } = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
         throw new Error(error || "Failed to delete task");
       }
-
       set((state) => ({
         tasks: state.tasks.filter((task) => task.id !== id),
       }));
@@ -150,26 +161,21 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
-  updateTask: async (
-    id: string,
-    updates: Partial<Omit<Task, "id">>,
-    token: string,
-  ) => {
+  updateTask: async (id, updates, token) => {
     set({ error: null });
     try {
       const response = await fetch(`${API_BASE}/${id}`, {
         method: "PATCH",
         headers: withAuth(token, { "Content-Type": "application/json" }),
         body: JSON.stringify(updates),
+        credentials: "include",
       });
-
       if (!response.ok) {
         const { error } = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
         throw new Error(error || "Failed to update task");
       }
-
       const updated = parseTask(await response.json());
       set((state) => ({
         tasks: state.tasks.map((task) => (task.id === id ? updated : task)),
@@ -183,5 +189,63 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       });
       throw error;
     }
+  },
+
+  activeTimer: null,
+  historyByTask: {},
+
+  startTimer: async (taskId, token) => {
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) Object.assign(headers, withAuth(token));
+    const res = await fetch(TIME_API_BASE, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ taskId }),
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const msg = "Failed to start timer";
+      get().setError(msg);
+      throw new Error(msg);
+    }
+    const { id } = (await res.json()) as { id: string };
+    set({ activeTimer: { id, taskId, startedAt: new Date().toISOString() } });
+  },
+
+  stopTimer: async (token) => {
+    const timer = get().activeTimer;
+    if (!timer) return;
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) Object.assign(headers, withAuth(token));
+    const res = await fetch(TIME_API_BASE, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ id: timer.id }),
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const msg = "Failed to stop timer";
+      get().setError(msg);
+      throw new Error(msg);
+    }
+    set({ activeTimer: null });
+    await get().fetchTaskHistory(timer.taskId, token);
+  },
+
+  fetchTaskHistory: async (taskId, token) => {
+    const headers: HeadersInit = {};
+    if (token) Object.assign(headers, withAuth(token));
+    const res = await fetch(
+      `${TIME_API_BASE}/history?taskId=${encodeURIComponent(taskId)}`,
+      { headers, credentials: "include" },
+    );
+    if (!res.ok) return;
+    const { entries } = (await res.json()) as { entries: HistoryEntry[] };
+    set((s) => ({
+      historyByTask: {
+        ...s.historyByTask,
+        [taskId]: entries,
+      },
+    }));
   },
 }));

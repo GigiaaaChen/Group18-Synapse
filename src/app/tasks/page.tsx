@@ -7,22 +7,58 @@ import { useEffect, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useTaskStore } from "@/stores/taskStore";
 
+//
+const formatMMSS = (startedAt: string, endedAt: string) => {
+  const start = new Date(startedAt).getTime();
+  const end = new Date(endedAt).getTime();
+  const secs = Math.max(0, Math.floor((end - start) / 1000));
+  const mm = Math.floor(secs / 60).toString().padStart(2, "0");
+  const ss = (secs % 60).toString().padStart(2, "0");
+  return `${mm}:${ss}`;
+};
+const daysUntilDue = (dueDate: string) => {
+  const due = new Date(`${dueDate}T00:00:00`);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((+due - +today) / 86400000);
+};
+
+// added reminders (state + scanner + helpers)
+type Reminder = { id: string; title: string; dueDate: string; days: number; storageKey: string };
+const todayKey = () => {
+  const n = new Date();
+  const y = n.getFullYear();
+  const m = String(n.getMonth() + 1).padStart(2, "0");
+  const d = String(n.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
 export default function TaskPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
-  const tasks = useTaskStore((state) => state.tasks);
-  const isLoadingTasks = useTaskStore((state) => state.isLoading);
-  const taskError = useTaskStore((state) => state.error);
-  const fetchTasks = useTaskStore((state) => state.fetchTasks);
-  const addTask = useTaskStore((state) => state.addTask);
-  const updateTaskProgress = useTaskStore((state) => state.updateTaskProgress);
-  const toggleTask = useTaskStore((state) => state.toggleTask);
-  const deleteTask = useTaskStore((state) => state.deleteTask);
-  const setError = useTaskStore((state) => state.setError);
+
+  const tasks = useTaskStore((s) => s.tasks);
+  const isLoadingTasks = useTaskStore((s) => s.isLoading);
+  const taskError = useTaskStore((s) => s.error);
+  const fetchTasks = useTaskStore((s) => s.fetchTasks);
+  const addTask = useTaskStore((s) => s.addTask);
+  const updateTaskProgress = useTaskStore((s) => s.updateTaskProgress);
+  const toggleTask = useTaskStore((s) => s.toggleTask);
+  const deleteTask = useTaskStore((s) => s.deleteTask);
+  const setError = useTaskStore((s) => s.setError);
+
+  const activeTimer = useTaskStore((s) => s.activeTimer);
+  const startTimer = useTaskStore((s) => s.startTimer);
+  const stopTimer = useTaskStore((s) => s.stopTimer);
+  const historyByTask = useTaskStore((s) => s.historyByTask);
+
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDate, setTaskDate] = useState("");
   const [taskCategory, setTaskCategory] = useState("personal");
   const [newProgress, setNewProgress] = useState(0);
+
+  // added reminders (state)
+  const [reminders, setReminders] = useState<Reminder[]>([]);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -30,26 +66,44 @@ export default function TaskPage() {
     }
   }, [session, isPending, router]);
 
-  const authToken = session?.session?.token;
+  const authToken =
+  (session as any)?.session?.token ??
+  (session as any)?.token ??
+  undefined;
 
   useEffect(() => {
     if (!authToken) return;
-    fetchTasks(authToken).catch(() => {
-      // errors are handled inside the store
-    });
+    fetchTasks(authToken).catch(() => {});
   }, [authToken, fetchTasks]);
+
+  // added reminders (scan tasks once per day; 1..3 days window; de-dupe via localStorage)
+  useEffect(() => {
+    const kToday = todayKey();
+    const next: Reminder[] = [];
+    for (const t of tasks) {
+      if (!t?.dueDate || t.completed) continue;
+      const d = daysUntilDue(t.dueDate);
+      if (d >= 1 && d <= 3) {
+        const key = `reminder:${t.id}:${t.dueDate}:${kToday}`;
+        try {
+          if (!localStorage.getItem(key)) {
+            next.push({ id: t.id, title: t.title, dueDate: t.dueDate, days: d, storageKey: key });
+          }
+        } catch {}
+      }
+    }
+    setReminders(next);
+  }, [tasks]);
 
   const handleAddTask = async () => {
     if (taskTitle.trim() === "") {
       alert("Please enter a task title!");
       return;
     }
-
     if (!authToken) {
       router.push("/signin");
       return;
     }
-
     try {
       await addTask(
         {
@@ -61,14 +115,11 @@ export default function TaskPage() {
         },
         authToken,
       );
-
       setTaskTitle("");
       setTaskDate("");
       setTaskCategory("personal");
       setNewProgress(0);
-    } catch {
-      // store already captured the error
-    }
+    } catch {}
   };
 
   const getCategoryColor = (category: string) => {
@@ -77,8 +128,10 @@ export default function TaskPage() {
       work: "#2196F3",
       health: "#FF9800",
       study: "#9C27B0",
+      exercise: "#FF7043",
+      hobby: "#8E24AA",
     };
-    return colors[category] || "#gray";
+    return colors[category] || "#888";
   };
 
   const containerStyle: CSSProperties = {
@@ -183,6 +236,50 @@ export default function TaskPage() {
           My Tasks
         </h1>
 
+        {/* added reminders (banner) */}
+        {reminders.length > 0 && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "12px",
+              borderRadius: "8px",
+              backgroundColor: "#fff3cd",
+              color: "#8a6d3b",
+              fontSize: "14px",
+              border: "1px solid #ffe8a1",
+            }}
+          >
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>Due soon:</div>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {reminders.map((r) => (
+                <li key={r.id} style={{ marginBottom: 6 }}>
+                  <span>
+                    “{r.title}” is due in {r.days} {r.days === 1 ? "day" : "days"} (Due: {r.dueDate})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { localStorage.setItem(r.storageKey, "1"); } catch {}
+                      setReminders((prev) => prev.filter((x) => x.id !== r.id));
+                    }}
+                    style={{
+                      marginLeft: 10,
+                      background: "#f0ad4e",
+                      color: "white",
+                      border: "none",
+                      padding: "2px 8px",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Dismiss for today
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {taskError && (
           <div
             style={{
@@ -249,12 +346,11 @@ export default function TaskPage() {
             <option value="work">Work</option>
             <option value="health">Health</option>
             <option value="study">Study</option>
+            <option value="exercise">Exercise</option>
+            <option value="hobby">Hobby</option>
           </select>
 
-          <label
-            htmlFor="new-task-progress"
-            style={{ fontSize: 14, color: "#666" }}
-          >
+          <label htmlFor="new-task-progress" style={{ fontSize: 14, color: "#666" }}>
             Progress: {newProgress}%
           </label>
           <input
@@ -338,9 +434,7 @@ export default function TaskPage() {
                     onChange={() => {
                       if (!authToken) return;
                       setError(null);
-                      toggleTask(task.id, authToken).catch(() => {
-                        // handled by store
-                      });
+                      toggleTask(task.id, authToken).catch(() => {});
                     }}
                     aria-label={`Mark ${task.title} as ${
                       task.completed ? "incomplete" : "complete"
@@ -352,16 +446,12 @@ export default function TaskPage() {
                         margin: "0 0 8px 0",
                         fontSize: "18px",
                         color: task.completed ? "#777" : "#333",
-                        textDecoration: task.completed
-                          ? "line-through"
-                          : "none",
+                        textDecoration: task.completed ? "line-through" : "none",
                       }}
                     >
                       {task.title}
                     </h3>
-                    <div
-                      style={{ display: "flex", gap: "15px", fontSize: "14px" }}
-                    >
+                    <div style={{ display: "flex", gap: "15px", fontSize: "14px" }}>
                       <span
                         style={{
                           color: "#666",
@@ -372,8 +462,32 @@ export default function TaskPage() {
                         {task.category}
                       </span>
                       {task.dueDate && (
-                        <span style={{ color: "#999" }}>
-                          Due: {task.dueDate}
+                        <span style={{ color: "#999" }}>Due: {task.dueDate}</span>
+                      )}
+                      {task.dueDate && !task.completed && daysUntilDue(task.dueDate) > 7 && (
+                        <span
+                          style={{
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            background: "#e3f2fd",
+                            color: "#0277bd",
+                            fontSize: 12,
+                          }}
+                        >
+                          Planned
+                        </span>
+                      )}
+                      {task.dueDate && !task.completed && daysUntilDue(task.dueDate) >= 1 && daysUntilDue(task.dueDate) <= 7 && (
+                        <span
+                          style={{
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            background: "#fff8e1",
+                            color: "#ef6c00",
+                            fontSize: 12,
+                          }}
+                        >
+                          Recent
                         </span>
                       )}
                       {task.completed && (
@@ -388,6 +502,15 @@ export default function TaskPage() {
                         </span>
                       )}
                     </div>
+
+                    <div style={{ marginTop: 8 }}>
+                      {(historyByTask?.[task.id] ?? []).map((h: any) => (
+                        <div key={h.id} style={{ fontSize: 12, color: "#666" }}>
+                          • {new Date(h.startedAt).toLocaleString()} →{" "}
+                          {new Date(h.endedAt).toLocaleString()} ({formatMMSS(h.startedAt, h.endedAt)})
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -400,9 +523,7 @@ export default function TaskPage() {
                       marginTop: 8,
                     }}
                   >
-                    <span style={{ fontSize: 12, color: "#666" }}>
-                      {task.progress}%
-                    </span>
+                    <span style={{ fontSize: 12, color: "#666" }}>{task.progress}%</span>
                     <input
                       type="range"
                       min="0"
@@ -411,26 +532,64 @@ export default function TaskPage() {
                       onChange={(e) => {
                         if (!authToken) return;
                         setError(null);
-                        updateTaskProgress(
-                          task.id,
-                          Number(e.target.value),
-                          authToken,
-                        ).catch(() => {
-                          // handled by store
-                        });
+                        updateTaskProgress(task.id, Number(e.target.value), authToken).catch(
+                          () => {},
+                        );
                       }}
                       style={{ flex: 1 }}
                     />
                   </div>
                 )}
+
+                {!task.completed &&
+                  (activeTimer?.taskId === task.id ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        stopTimer(authToken);
+                      }}
+                      style={{
+                        backgroundColor: "#ff4757",
+                        color: "white",
+                        border: "none",
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        marginLeft: 8,
+                      }}
+                    >
+                      Stop Timer
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        startTimer(task.id, authToken);
+                      }}
+                      style={{
+                        backgroundColor: "#4CAF50",
+                        color: "white",
+                        border: "none",
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        marginLeft: 8,
+                      }}
+                    >
+                      Start Timer
+                    </button>
+                  ))}
+
                 <button
                   type="button"
                   onClick={() => {
                     if (!authToken) return;
                     setError(null);
-                    deleteTask(task.id, authToken).catch(() => {
-                      // handled by store
-                    });
+                    deleteTask(task.id, authToken).catch(() => {});
                   }}
                   style={{
                     backgroundColor: "#f44336",
