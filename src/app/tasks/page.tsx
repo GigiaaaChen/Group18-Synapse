@@ -91,59 +91,6 @@ export default function TaskPage() {
   }, [authToken, fetchTasks]);
 
   useEffect(() => {
-    if (!authToken) return;
-
-    const now = new Date();
-    const h = now.getHours();
-    const dailyKey = `goalremind:daily:${todayKey()}`;
-
-    const headers: HeadersInit = {};
-    if (authToken) headers.Authorization = `Bearer ${authToken}`;
-
-    const runDaily = async () => {
-      if (h < 12) return;
-      if (localStorage.getItem(dailyKey)) return;
-      const res = await fetch("/api/cron/daily?consume=1", {
-        headers,
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      const data = await res.json().catch(() => ({ reminders: [] }));
-      if (Array.isArray(data.reminders) && data.reminders.length) {
-        setGoalReminders((prev) => [
-          ...prev,
-          ...data.reminders.map((r: any) => ({ text: r.text, title: r.title })),
-        ]);
-        localStorage.setItem(dailyKey, "1");
-      }
-    };
-
-    const weeklyKeyStr = `goalremind:weekly:${weekKey()}`;
-
-    const runWeekly = async () => {
-      const dow = now.getDay();
-      if (!(dow === 0 && h >= 9)) return;
-      if (localStorage.getItem(weeklyKeyStr)) return;
-      const res = await fetch("/api/cron/weekly?consume=1", {
-        headers,
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      const data = await res.json().catch(() => ({ reminders: [] }));
-      if (Array.isArray(data.reminders) && data.reminders.length) {
-        setGoalReminders((prev) => [
-          ...prev,
-          ...data.reminders.map((r: any) => ({ text: r.text, title: r.title })),
-        ]);
-        localStorage.setItem(weeklyKeyStr, "1");
-      }
-    };
-
-    runDaily().catch(() => {});
-    runWeekly().catch(() => {});
-  }, [authToken]);
-
-  useEffect(() => {
     const kToday = todayKey();
     const next: Reminder[] = [];
     for (const t of tasks) {
@@ -159,6 +106,18 @@ export default function TaskPage() {
       }
     }
     setReminders(next);
+  }, [tasks]);
+
+  // UI-only goal reminders: derive from tasks (no API/auth)
+  useEffect(() => {
+    const items =
+      tasks
+        .filter((t) => t.is_goal && (t.goal_active ?? true) && Number(t.progress ?? 0) < 100)
+        .map((t) => ({
+          title: t.title,
+          text: `Keep going on ${t.goal_category ?? "your goal"} — ${Number(t.progress ?? 0)}% so far.`,
+        }));
+    setGoalReminders(items);
   }, [tasks]);
 
   const handleAddTask = async () => {
@@ -307,29 +266,6 @@ export default function TaskPage() {
           My Tasks
         </h1>
 
-        {goalReminders.length > 0 && (
-          <div
-            style={{
-              marginBottom: "16px",
-              padding: "12px",
-              borderRadius: "8px",
-              backgroundColor: "#e8f5e9",
-              color: "#1b5e20",
-              fontSize: "14px",
-              border: "1px solid #c8e6c9",
-            }}
-          >
-            <div style={{ marginBottom: 8, fontWeight: 600 }}>Goal reminders:</div>
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {goalReminders.map((r, idx) => (
-                <li key={idx} style={{ marginBottom: 6 }}>
-                  <span>“{r.title}” — {r.text}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         {reminders.length > 0 && (
           <div
             style={{
@@ -367,6 +303,29 @@ export default function TaskPage() {
                   >
                     Dismiss for today
                   </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {goalReminders.length > 0 && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "12px",
+              borderRadius: "8px",
+              backgroundColor: "#e8f5e9",
+              color: "#1b5e20",
+              fontSize: "14px",
+              border: "1px solid #c8e6c9",
+            }}
+          >
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>Goals:</div>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {goalReminders.map((r, idx) => (
+                <li key={idx} style={{ marginBottom: 6 }}>
+                  <span>“{r.title}” — {r.text}</span>
                 </li>
               ))}
             </ul>
