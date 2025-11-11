@@ -20,7 +20,7 @@ interface TaskStore {
   isLoading: boolean;
   error: string | null;
   fetchTasks: (token: string) => Promise<void>;
-  addTask: (task: TaskDraft, token: string) => Promise<void>;
+  addTask: (task: Partial<TaskDraft>, token: string) => Promise<void>;
   updateTaskProgress: (id: string, value: number, token: string) => Promise<void>;
   toggleTask: (id: string, token: string) => Promise<void>;
   deleteTask: (id: string, token: string) => Promise<void>;
@@ -48,11 +48,17 @@ const withAuth = (token: string, extra: HeadersInit = {}) => ({
 
 const parseTask = (task: Task): Task => ({
   id: task.id,
+  user_id: task.user_id,
   title: task.title,
-  dueDate: task.dueDate ?? null,
-  category: task.category,
-  completed: task.completed,
-  progress: task.progress,
+  category: task.category ?? null,
+  due_date: task.due_date ?? null,
+  completed: !!task.completed,
+  progress: Number(task.progress ?? 0),
+  is_goal: !!task.is_goal,
+  goal_cadence: task.goal_cadence ?? null,
+  goal_target_per_period: task.goal_target_per_period ?? null,
+  goal_category: task.goal_category ?? null,
+  goal_active: task.goal_active ?? true,
 });
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -107,7 +113,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       }
       const created = parseTask(await response.json());
       set((state) => ({
-        tasks: [...state.tasks, created],
+        tasks: [created, ...state.tasks],
       }));
     } catch (error) {
       set({
@@ -195,8 +201,12 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   historyByTask: {},
 
   startTimer: async (taskId, token) => {
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (token) Object.assign(headers, withAuth(token));
+    const headers: HeadersInit = token
+      ? withAuth(token, { "Content-Type": "application/json" })
+      : { "Content-Type": "application/json" };
+
+    const prevActive = get().activeTimer;
+
     const res = await fetch(TIME_API_BASE, {
       method: "POST",
       headers,
@@ -210,13 +220,20 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
     const { id } = (await res.json()) as { id: string };
     set({ activeTimer: { id, taskId, startedAt: new Date().toISOString() } });
+    
+    if (prevActive?.taskId) {
+      try {
+        await get().fetchTaskHistory(prevActive.taskId, token);
+      } catch {}
+    }
   },
 
   stopTimer: async (token) => {
     const timer = get().activeTimer;
     if (!timer) return;
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (token) Object.assign(headers, withAuth(token));
+    const headers: HeadersInit = token
+      ? withAuth(token, { "Content-Type": "application/json" })
+      : { "Content-Type": "application/json" };
     const res = await fetch(TIME_API_BASE, {
       method: "PATCH",
       headers,
@@ -233,8 +250,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   fetchTaskHistory: async (taskId, token) => {
-    const headers: HeadersInit = {};
-    if (token) Object.assign(headers, withAuth(token));
+    const headers: HeadersInit = token ? withAuth(token) : {};
     const res = await fetch(
       `${TIME_API_BASE}/history?taskId=${encodeURIComponent(taskId)}`,
       { headers, credentials: "include" },

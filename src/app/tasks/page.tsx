@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useTaskStore } from "@/stores/taskStore";
 
-//
 const formatMMSS = (startedAt: string, endedAt: string) => {
   const start = new Date(startedAt).getTime();
   const end = new Date(endedAt).getTime();
@@ -23,7 +22,6 @@ const daysUntilDue = (dueDate: string) => {
   return Math.floor((+due - +today) / 86400000);
 };
 
-// added reminders (state + scanner + helpers)
 type Reminder = { id: string; title: string; dueDate: string; days: number; storageKey: string };
 const todayKey = () => {
   const n = new Date();
@@ -31,6 +29,17 @@ const todayKey = () => {
   const m = String(n.getMonth() + 1).padStart(2, "0");
   const d = String(n.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+};
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const dateKey = () => {
+  const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+const weekKey = () => {
+  const d = new Date();
+  const onejan = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil((((d.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7);
+  return `${d.getFullYear()}-W${pad2(week)}`;
 };
 
 export default function TaskPage() {
@@ -57,8 +66,13 @@ export default function TaskPage() {
   const [taskCategory, setTaskCategory] = useState("personal");
   const [newProgress, setNewProgress] = useState(0);
 
-  // added reminders (state)
+  const [isGoal, setIsGoal] = useState(false);
+  const [goalCadence, setGoalCadence] = useState<"daily" | "weekly">("daily");
+  const [goalTarget, setGoalTarget] = useState<number>(30);
+  const [goalCategory, setGoalCategory] = useState<string>("");
+
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [goalReminders, setGoalReminders] = useState<{ text: string; title: string }[]>([]);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -67,27 +81,79 @@ export default function TaskPage() {
   }, [session, isPending, router]);
 
   const authToken =
-  (session as any)?.session?.token ??
-  (session as any)?.token ??
-  undefined;
+    (session as any)?.session?.token ??
+    (session as any)?.token ??
+    undefined;
 
   useEffect(() => {
     if (!authToken) return;
     fetchTasks(authToken).catch(() => {});
   }, [authToken, fetchTasks]);
 
-  // added reminders (scan tasks once per day; 1..3 days window; de-dupe via localStorage)
+  useEffect(() => {
+    if (!authToken) return;
+
+    const now = new Date();
+    const h = now.getHours();
+    const dailyKey = `goalremind:daily:${todayKey()}`;
+
+    const headers: HeadersInit = {};
+    if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
+    const runDaily = async () => {
+      if (h < 12) return;
+      if (localStorage.getItem(dailyKey)) return;
+      const res = await fetch("/api/cron/daily?consume=1", {
+        headers,
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({ reminders: [] }));
+      if (Array.isArray(data.reminders) && data.reminders.length) {
+        setGoalReminders((prev) => [
+          ...prev,
+          ...data.reminders.map((r: any) => ({ text: r.text, title: r.title })),
+        ]);
+        localStorage.setItem(dailyKey, "1");
+      }
+    };
+
+    const weeklyKeyStr = `goalremind:weekly:${weekKey()}`;
+
+    const runWeekly = async () => {
+      const dow = now.getDay();
+      if (!(dow === 0 && h >= 9)) return;
+      if (localStorage.getItem(weeklyKeyStr)) return;
+      const res = await fetch("/api/cron/weekly?consume=1", {
+        headers,
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({ reminders: [] }));
+      if (Array.isArray(data.reminders) && data.reminders.length) {
+        setGoalReminders((prev) => [
+          ...prev,
+          ...data.reminders.map((r: any) => ({ text: r.text, title: r.title })),
+        ]);
+        localStorage.setItem(weeklyKeyStr, "1");
+      }
+    };
+
+    runDaily().catch(() => {});
+    runWeekly().catch(() => {});
+  }, [authToken]);
+
   useEffect(() => {
     const kToday = todayKey();
     const next: Reminder[] = [];
     for (const t of tasks) {
-      if (!t?.dueDate || t.completed) continue;
-      const d = daysUntilDue(t.dueDate);
+      if (!t?.due_date || t.completed) continue;
+      const d = daysUntilDue(t.due_date);
       if (d >= 1 && d <= 3) {
-        const key = `reminder:${t.id}:${t.dueDate}:${kToday}`;
+        const key = `reminder:${t.id}:${t.due_date}:${kToday}`;
         try {
           if (!localStorage.getItem(key)) {
-            next.push({ id: t.id, title: t.title, dueDate: t.dueDate, days: d, storageKey: key });
+            next.push({ id: t.id, title: t.title, dueDate: t.due_date, days: d, storageKey: key });
           }
         } catch {}
       }
@@ -96,22 +162,21 @@ export default function TaskPage() {
   }, [tasks]);
 
   const handleAddTask = async () => {
-    if (taskTitle.trim() === "") {
-      alert("Please enter a task title!");
-      return;
-    }
-    if (!authToken) {
-      router.push("/signin");
-      return;
-    }
+    if (taskTitle.trim() === "") return alert("Please enter a task title!");
+    if (!authToken) return router.push("/signin");
     try {
       await addTask(
         {
           title: taskTitle,
-          dueDate: taskDate ? taskDate : null,
+          dueDate: isGoal ? null : (taskDate ? taskDate : null),
           category: taskCategory,
           completed: false,
           progress: newProgress,
+          is_goal: isGoal,
+          goal_cadence: isGoal ? goalCadence : null,
+          goal_target_per_period: isGoal ? goalTarget : null,
+          goal_category: isGoal ? (goalCategory || taskCategory) : null,
+          goal_active: isGoal ? true : undefined,
         },
         authToken,
       );
@@ -119,6 +184,10 @@ export default function TaskPage() {
       setTaskDate("");
       setTaskCategory("personal");
       setNewProgress(0);
+      setIsGoal(false);
+      setGoalCadence("daily");
+      setGoalTarget(30);
+      setGoalCategory("");
     } catch {}
   };
 
@@ -130,9 +199,13 @@ export default function TaskPage() {
       study: "#9C27B0",
       exercise: "#FF7043",
       hobby: "#8E24AA",
+      general: "#888",
     };
     return colors[category] || "#888";
   };
+
+  const getDisplayCategory = (task: any) =>
+    task.is_goal ? (task.goal_category || task.category || "general") : (task.category || "general");
 
   const containerStyle: CSSProperties = {
     minHeight: "100vh",
@@ -172,9 +245,7 @@ export default function TaskPage() {
     );
   }
 
-  if (!session) {
-    return null;
-  }
+  if (!session) return null;
 
   return (
     <div style={containerStyle}>
@@ -236,7 +307,29 @@ export default function TaskPage() {
           My Tasks
         </h1>
 
-        {/* added reminders (banner) */}
+        {goalReminders.length > 0 && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "12px",
+              borderRadius: "8px",
+              backgroundColor: "#e8f5e9",
+              color: "#1b5e20",
+              fontSize: "14px",
+              border: "1px solid #c8e6c9",
+            }}
+          >
+            <div style={{ marginBottom: 8, fontWeight: 600 }}>Goal reminders:</div>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {goalReminders.map((r, idx) => (
+                <li key={idx} style={{ marginBottom: 6 }}>
+                  <span>“{r.title}” — {r.text}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {reminders.length > 0 && (
           <div
             style={{
@@ -319,17 +412,19 @@ export default function TaskPage() {
             }}
           />
 
-          <input
-            type="date"
-            value={taskDate}
-            onChange={(e) => setTaskDate(e.target.value)}
-            style={{
-              padding: "12px",
-              fontSize: "16px",
-              borderRadius: "8px",
-              border: "2px solid #ddd",
-            }}
-          />
+          {!isGoal && (
+            <input
+              type="date"
+              value={taskDate}
+              onChange={(e) => setTaskDate(e.target.value)}
+              style={{
+                padding: "12px",
+                fontSize: "16px",
+                borderRadius: "8px",
+                border: "2px solid #ddd",
+              }}
+            />
+          )}
 
           <select
             value={taskCategory}
@@ -349,6 +444,52 @@ export default function TaskPage() {
             <option value="exercise">Exercise</option>
             <option value="hobby">Hobby</option>
           </select>
+
+          <label className="flex items-center gap-2" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={isGoal}
+              onChange={(e) => setIsGoal(e.target.checked)}
+            />
+            Set as goal
+          </label>
+
+          {isGoal && (
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr 1fr" }}>
+              <label className="grid gap-1" style={{ display: "grid", gap: 4 }}>
+                <span className="text-sm">Cadence</span>
+                <select
+                  value={goalCadence}
+                  onChange={(e) => setGoalCadence(e.target.value as "daily" | "weekly")}
+                  style={{ padding: "10px", borderRadius: 8, border: "2px solid #ddd" }}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </label>
+
+              <label className="grid gap-1" style={{ display: "grid", gap: 4 }}>
+                <span className="text-sm">Target per period</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={goalTarget}
+                  onChange={(e) => setGoalTarget(parseInt(e.target.value || "0", 10))}
+                  style={{ padding: "10px", borderRadius: 8, border: "2px solid #ddd" }}
+                />
+              </label>
+
+              <label className="grid gap-1" style={{ display: "grid", gap: 4 }}>
+                <span className="text-sm">Goal category</span>
+                <input
+                  value={goalCategory}
+                  onChange={(e) => setGoalCategory(e.target.value)}
+                  placeholder="Health / Study / Work"
+                  style={{ padding: "10px", borderRadius: 8, border: "2px solid #ddd" }}
+                />
+              </label>
+            </div>
+          )}
 
           <label htmlFor="new-task-progress" style={{ fontSize: 14, color: "#666" }}>
             Progress: {newProgress}%
@@ -415,7 +556,7 @@ export default function TaskPage() {
                   padding: "15px",
                   backgroundColor: "#fafafa",
                   borderRadius: "8px",
-                  borderLeft: `4px solid ${getCategoryColor(task.category)}`,
+                  borderLeft: `4px solid ${getCategoryColor(getDisplayCategory(task))}`,
                   gap: "15px",
                   opacity: task.completed ? 0.6 : 1,
                 }}
@@ -451,7 +592,8 @@ export default function TaskPage() {
                     >
                       {task.title}
                     </h3>
-                    <div style={{ display: "flex", gap: "15px", fontSize: "14px" }}>
+
+                    <div style={{ display: "flex", gap: "15px", fontSize: "14px", flexWrap: "wrap" }}>
                       <span
                         style={{
                           color: "#666",
@@ -459,37 +601,70 @@ export default function TaskPage() {
                           fontWeight: "bold",
                         }}
                       >
-                        {task.category}
+                        {getDisplayCategory(task)}
                       </span>
-                      {task.dueDate && (
-                        <span style={{ color: "#999" }}>Due: {task.dueDate}</span>
+
+                      {task.is_goal ? (
+                        <>
+                          <span
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              background: "#e8f5e9",
+                              color: "#1b5e20",
+                              fontSize: 12,
+                            }}
+                          >
+                            Goal • {task.goal_cadence || "-"}
+                          </span>
+                          {typeof task.goal_target_per_period === "number" && (
+                            <span
+                              style={{
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                background: "#e3f2fd",
+                                color: "#0277bd",
+                                fontSize: 12,
+                              }}
+                            >
+                              Target per period: {task.goal_target_per_period}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {task.due_date && (
+                            <span style={{ color: "#999" }}>Due: {task.due_date}</span>
+                          )}
+                          {task.due_date && !task.completed && daysUntilDue(task.due_date) > 7 && (
+                            <span
+                              style={{
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                background: "#e3f2fd",
+                                color: "#0277bd",
+                                fontSize: 12,
+                              }}
+                            >
+                              Planned
+                            </span>
+                          )}
+                          {task.due_date && !task.completed && daysUntilDue(task.due_date) >= 1 && daysUntilDue(task.due_date) <= 7 && (
+                            <span
+                              style={{
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                background: "#fff8e1",
+                                color: "#ef6c00",
+                                fontSize: 12,
+                              }}
+                            >
+                              Recent
+                            </span>
+                          )}
+                        </>
                       )}
-                      {task.dueDate && !task.completed && daysUntilDue(task.dueDate) > 7 && (
-                        <span
-                          style={{
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            background: "#e3f2fd",
-                            color: "#0277bd",
-                            fontSize: 12,
-                          }}
-                        >
-                          Planned
-                        </span>
-                      )}
-                      {task.dueDate && !task.completed && daysUntilDue(task.dueDate) >= 1 && daysUntilDue(task.dueDate) <= 7 && (
-                        <span
-                          style={{
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            background: "#fff8e1",
-                            color: "#ef6c00",
-                            fontSize: 12,
-                          }}
-                        >
-                          Recent
-                        </span>
-                      )}
+
                       {task.completed && (
                         <span
                           style={{
