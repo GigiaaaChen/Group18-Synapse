@@ -42,6 +42,8 @@ const weekKey = () => {
   return `${d.getFullYear()}-W${pad2(week)}`;
 };
 
+type GoalReminder = { id: string; title: string; text: string; storageKey: string };
+
 export default function TaskPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
@@ -72,7 +74,7 @@ export default function TaskPage() {
   const [goalCategory, setGoalCategory] = useState<string>("");
 
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [goalReminders, setGoalReminders] = useState<{ text: string; title: string }[]>([]);
+  const [goalReminders, setGoalReminders] = useState<GoalReminder[]>([]);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -108,15 +110,22 @@ export default function TaskPage() {
     setReminders(next);
   }, [tasks]);
 
-  // UI-only goal reminders: derive from tasks (no API/auth)
   useEffect(() => {
-    const items =
-      tasks
-        .filter((t) => t.is_goal && (t.goal_active ?? true) && Number(t.progress ?? 0) < 100)
-        .map((t) => ({
-          title: t.title,
-          text: `Keep going on ${t.goal_category ?? "your goal"} — ${Number(t.progress ?? 0)}% so far.`,
-        }));
+    const kToday = todayKey();
+    const items: GoalReminder[] = [];
+    for (const t of tasks) {
+      if (!t.is_goal || !(t.goal_active ?? true) || Number(t.progress ?? 0) >= 100) continue;
+      const key = `goal-ui-reminder:${t.id}:${kToday}`;
+      try {
+        if (localStorage.getItem(key)) continue;
+      } catch {}
+      items.push({
+        id: t.id,
+        title: t.title,
+        text: `Keep going on ${t.goal_category ?? "your goal"} — ${Number(t.progress ?? 0)}% so far.`,
+        storageKey: key,
+      });
+    }
     setGoalReminders(items);
   }, [tasks]);
 
@@ -323,9 +332,27 @@ export default function TaskPage() {
           >
             <div style={{ marginBottom: 8, fontWeight: 600 }}>Goals:</div>
             <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {goalReminders.map((r, idx) => (
-                <li key={idx} style={{ marginBottom: 6 }}>
+              {goalReminders.map((r) => (
+                <li key={r.id} style={{ marginBottom: 6 }}>
                   <span>“{r.title}” — {r.text}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { localStorage.setItem(r.storageKey, "1"); } catch {}
+                      setGoalReminders((prev) => prev.filter((x) => x.id !== r.id));
+                    }}
+                    style={{
+                      marginLeft: 10,
+                      background: "#2e7d32",
+                      color: "white",
+                      border: "none",
+                      padding: "2px 8px",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Dismiss for today
+                  </button>
                 </li>
               ))}
             </ul>
