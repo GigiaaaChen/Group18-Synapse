@@ -3,21 +3,58 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signUp } from "@/lib/auth-client";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [hoveredButton, setHoveredButton] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (username.length < 3) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setCheckingUsername(true);
+      try {
+        const response = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`);
+        const data = await response.json();
+        setUsernameAvailable(data.available);
+      } catch (err) {
+        console.error("Failed to check username", err);
+      } finally {
+        setCheckingUsername(false);
+      }
+    }, 500); // 500ms
+
+    return () => clearTimeout(timeoutId);
+  }, [username]);
 
   const handleSignUp = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
+
+    // Check if username is available
+    if (usernameAvailable === false) {
+      setError("Username is already taken. Please choose another.");
+      return;
+    }
+
+    if (usernameAvailable === null) {
+      setError("Please wait while we check username availability");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -25,6 +62,7 @@ export default function SignUpPage() {
         email,
         password,
         name,
+        username,
         callbackURL: "/tasks",
       });
 
@@ -149,6 +187,101 @@ export default function SignUpPage() {
               placeholder="John Doe"
               required
             />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: 'block',
+                color: '#eeeeee',
+                fontSize: '14px',
+                fontWeight: '500',
+                marginBottom: '8px'
+              }}
+              htmlFor="signup-username"
+            >
+              Username
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                id="signup-username"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                  setUsernameAvailable(null);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  paddingRight: '40px',
+                  background: '#1a1a1a',
+                  border: `1px solid ${
+                    username.length >= 3
+                      ? usernameAvailable === true
+                        ? '#10b981'
+                        : usernameAvailable === false
+                        ? '#ef4444'
+                        : '#2a2a2a'
+                      : '#2a2a2a'
+                  }`,
+                  borderRadius: '8px',
+                  color: '#eeeeee',
+                  fontSize: '15px',
+                  outline: 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                onFocus={(e) => {
+                  if (username.length < 3 || usernameAvailable === null) {
+                    e.target.style.borderColor = '#6366f1';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+                  }
+                }}
+                onBlur={(e) => {
+                  e.target.style.boxShadow = 'none';
+                }}
+                placeholder="johndoe"
+                pattern="[a-z0-9_]+"
+                title="Username can only contain lowercase letters, numbers, and underscores"
+                minLength={3}
+                required
+              />
+              {username.length >= 3 && (
+                <div style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '18px'
+                }}>
+                  {checkingUsername ? (
+                    <span style={{ color: '#9ca3af' }}>⏳</span>
+                  ) : usernameAvailable === true ? (
+                    <span style={{ color: '#10b981' }}>✓</span>
+                  ) : usernameAvailable === false ? (
+                    <span style={{ color: '#ef4444' }}>✗</span>
+                  ) : null}
+                </div>
+              )}
+            </div>
+            {username.length >= 3 && usernameAvailable === false && (
+              <div style={{
+                marginTop: '6px',
+                fontSize: '13px',
+                color: '#fca5a5'
+              }}>
+                Username is already taken
+              </div>
+            )}
+            {username.length >= 3 && usernameAvailable === true && (
+              <div style={{
+                marginTop: '6px',
+                fontSize: '13px',
+                color: '#6ee7b7'
+              }}>
+                Username is available
+              </div>
+            )}
           </div>
 
           <div>

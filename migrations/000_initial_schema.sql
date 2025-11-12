@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS "user" (
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     "image" TEXT,
-    "username" TEXT
+    "username" TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS "session" (
@@ -46,3 +46,4 @@ CREATE INDEX IF NOT EXISTS "idx_session_userId" ON "session"("userId");
 CREATE INDEX IF NOT EXISTS "idx_session_token" ON "session"("token");
 CREATE INDEX IF NOT EXISTS "idx_account_userId" ON "account"("userId");
 CREATE INDEX IF NOT EXISTS "idx_verification_identifier" ON "verification"("identifier");
+CREATE INDEX IF NOT EXISTS "idx_user_username" ON "user"("username");

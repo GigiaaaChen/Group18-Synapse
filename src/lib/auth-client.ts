@@ -8,4 +8,16 @@ export const authClient = createAuthClient({
   baseURL,
 });
 
-export const { signIn, signUp, signOut, useSession, getSession } = authClient;
+export const { signIn, signOut, useSession, getSession } = authClient;
+
+export const signUp = {
+  email: async (data: {
+    email: string;
+    password: string;
+    name: string;
+    username: string;
+    callbackURL?: string;
+  }) => {
+    return authClient.signUp.email(data as any);
+  },
+};
