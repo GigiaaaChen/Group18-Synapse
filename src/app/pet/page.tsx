@@ -1,143 +1,284 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
+import { Toaster } from "sonner";
+import { TasksIcon, FriendsIcon, PetIcon, SynapseLogo } from "@/components/icons";
 import PetPanel from "@/components/pet/PetPanel";
 
 export default function PetPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
+  const [hoveredButton, setHoveredButton] = useState<string | null>(null);
+  const [userXp, setUserXp] = useState<number>((session?.user as any)?.xp ?? 0);
 
-  // ---- Styles (match your Tasks page) ----
-  const containerStyle: CSSProperties = {
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: "20px",
-    fontFamily: "Arial, sans-serif",
-  };
+  useEffect(() => {
+    if (!isPending && !session) router.push("/signin");
+  }, [session, isPending, router]);
 
-  const boxStyle: CSSProperties = {
-    backgroundColor: "white",
-    padding: "40px",
-    borderRadius: "20px",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-    maxWidth: "900px",
-    width: "100%",
-    maxHeight: "90vh",
-    overflow: "auto",
-  };
+  useEffect(() => {
+    if (session?.user) setUserXp((session.user as any)?.xp ?? 0);
+  }, [session]);
 
-  const pill: CSSProperties = {
-    padding: "4px 8px",
-    borderRadius: 999,
-    background: "#eef2ff",
-    color: "#3730a3",
-    fontSize: 12,
-    fontWeight: 700,
-  };
+  const userId: string =
+    (session?.user as any)?.id ||
+    session?.user?.email ||
+    session?.user?.name ||
+    "guest";
 
-  // ---- IMPORTANT: do NOT redirect when not signed in ----
-  // We still show a loading state while the session is being resolved.
+  const userInitial = useMemo(
+    () => (session?.user?.name?.[0] || session?.user?.email?.[0] || "U").toUpperCase(),
+    [session?.user]
+  );
+
   if (isPending) {
     return (
-      <div style={containerStyle}>
-        <div style={boxStyle}>
-          <h1 style={{ fontSize: "32px", color: "#333", textAlign: "center" }}>
-            Loading...
-          </h1>
-        </div>
+      <div
+        style={{
+          display: "flex",
+          minHeight: "100vh",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#121212",
+          color: "#9ca3af",
+          fontSize: 14,
+        }}
+      >
+        Loading...
       </div>
     );
   }
-
-  // Use real user ID if logged in; otherwise fall back to demo
-  const userId =
-    (session as any)?.user?.email ||
-    (session as any)?.user?.id ||
-    "demo-user-1";
-
-  const handleSignOut = async () => {
-    await signOut();
-    router.push("/signin");
-  };
+  if (!session) return null;
 
   return (
-    <div style={containerStyle}>
-      <div style={boxStyle}>
-        {/* Header (matches your Tasks page, but hides Sign Out in demo mode) */}
-        <div
+    <>
+      <Toaster position="top-center" richColors />
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#121212",
+          color: "#eeeeee",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          display: "flex",
+        }}
+      >
+        {/* Sidebar */}
+        <aside
           style={{
+            width: 260,
+            background: "#121212",
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "20px",
+            flexDirection: "column",
+            position: "fixed",
+            height: "100vh",
+            left: 0,
+            top: 0,
           }}
         >
-          <Link
-            href="/tasks"
+          {/* Logo */}
+          <div style={{ padding: "24px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <SynapseLogo />
+              <span style={{ fontSize: 22, fontWeight: 700, color: "#eeeeee" }}>
+                Synapse
+              </span>
+            </div>
+          </div>
+
+          {/* Nav */}
+          <nav
             style={{
-              backgroundColor: "#e0e0e0",
-              color: "#333",
-              border: "none",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "14px",
-              display: "inline-block",
-              textDecoration: "none",
+              flex: 1,
+              padding: "20px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
             }}
           >
-            ← Back to Tasks
-          </Link>
+            <button
+              onClick={() => router.push("/tasks")}
+              onMouseEnter={() => setHoveredButton("tasks")}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: hoveredButton === "tasks" ? "#1a1a1a" : "transparent",
+                color: "#9ca3af",
+                fontSize: 15,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all .2s ease",
+                textAlign: "left",
+              }}
+            >
+              <TasksIcon active={false} />
+              Tasks
+            </button>
 
-          {session ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-              <span style={{ color: "#666", fontSize: "14px" }}>
-                {(session as any).user.name || (session as any).user.email}
-              </span>
-              <button
-                type="button"
-                onClick={handleSignOut}
+            <button
+              onClick={() => router.push("/friends")}
+              onMouseEnter={() => setHoveredButton("friends")}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: hoveredButton === "friends" ? "#1a1a1a" : "transparent",
+                color: "#9ca3af",
+                fontSize: 15,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all .2s ease",
+                textAlign: "left",
+              }}
+            >
+              <FriendsIcon active={false} />
+              Friends
+            </button>
+
+            {/* Active: Pet */}
+            <button
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: "#1a1a1a",
+                color: "#eeeeee",
+                fontSize: 15,
+                fontWeight: 500,
+                textAlign: "left",
+                cursor: "default",
+              }}
+            >
+              <PetIcon active />
+              Pet
+            </button>
+          </nav>
+
+          {/* User */}
+          <div style={{ padding: 16 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 12,
+              }}
+            >
+              <div
                 style={{
-                  backgroundColor: "#ff4757",
-                  color: "white",
-                  border: "none",
-                  padding: "8px 16px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "14px",
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: "#4972e1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#fff",
                 }}
               >
-                Sign Out
-              </button>
+                {userInitial}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: "#eee",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {session.user.name || "User"}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#888",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  @{(session.user as any).username || "username"}
+                </div>
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#a5b4fc",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {userXp} XP
+              </div>
             </div>
-          ) : (
-            <span style={pill} title="Auth not required for preview">
-              DEMO MODE
-            </span>
-          )}
-        </div>
+            <button
+              onClick={async () => {
+                await signOut();
+                router.push("/signin");
+              }}
+              onMouseEnter={() => setHoveredButton("signout")}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                width: "100%",
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "none",
+                background: hoveredButton === "signout" ? "#7f1d1d" : "#991b1b",
+                color: "#fca5a5",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all .2s ease",
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        </aside>
 
-        <h1 style={{ fontSize: "32px", color: "#333", marginBottom: "10px" }}>
-          Your Pet
-        </h1>
+        {/* Main */}
+        <main style={{ marginLeft: 260, flex: 1, padding: 16, width: "100%" }}>
+          <div
+            style={{
+              background: "#161616",
+              borderRadius: 24,
+              padding: "20px 28px",
+              minHeight: "calc(100vh - 32px)",
+            }}
+          >
+            <h1
+              style={{
+                fontSize: 32,
+                fontWeight: 700,
+                color: "#eee",
+                marginBottom: 24,
+              }}
+            >
+              My Pet
+            </h1>
 
-        {!session && (
-          <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 16 }}>
-            You are viewing the pet in <b>Demo Mode</b>. Progress & selections
-            are saved to your browser (localStorage) under <code>{userId}</code>.
-            When sign-in is fixed, this page will automatically use your account.
-          </p>
-        )}
-
-        {/* Full pet feature: evolution + customization + persistence */}
-        <PetPanel userId={userId} />
+            {/* Tamagotchi panel (evolution driven by user XP) */}
+            <PetPanel userId={userId} xp={userXp} />
+          </div>
+        </main>
       </div>
-    </div>
+    </>
   );
 }
