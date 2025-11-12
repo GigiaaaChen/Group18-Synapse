@@ -12,6 +12,7 @@ interface TaskRow {
   category: string;
   completed: boolean;
   progress: number;
+  completedAt: string | null;
 }
 
 const mapRowToTask = (row: TaskRow): Task => ({
@@ -21,6 +22,7 @@ const mapRowToTask = (row: TaskRow): Task => ({
   category: row.category,
   completed: row.completed,
   progress: row.progress,
+  completedAt: row.completedAt,
 });
 
 export const PATCH = async (
@@ -34,6 +36,25 @@ export const PATCH = async (
     const updates: string[] = [];
     const values: Array<string | number | null | boolean> = [];
     let index = 1;
+    let isCompletingTask = false;
+    let isUncompletingTask = false;
+    let taskDueDate: string | null = null;
+
+    // Fetch current task state if changing completion status
+    if (body.completed !== undefined) {
+      const currentTask = await db.query(
+        `SELECT "dueDate", "completed" FROM "task" WHERE "id" = $1 AND "userId" = $2`,
+        [taskId, user.id],
+      );
+      if (currentTask.rows[0]) {
+        taskDueDate = currentTask.rows[0].dueDate;
+        if (body.completed === true && !currentTask.rows[0].completed) {
+          isCompletingTask = true;
+        } else if (body.completed === false && currentTask.rows[0].completed) {
+          isUncompletingTask = true;
+        }
+      }
+    }
 
     if (body.title !== undefined) {
       const title = body.title.trim();
@@ -57,6 +78,13 @@ export const PATCH = async (
     if (body.completed !== undefined) {
       updates.push(`"completed" = $${index++}`);
       values.push(Boolean(body.completed));
+
+      // Set completedAt when marking as complete
+      if (body.completed === true) {
+        updates.push(`"completedAt" = NOW()`);
+      } else {
+        updates.push(`"completedAt" = NULL`);
+      }
     }
 
     if (body.progress !== undefined) {
@@ -91,7 +119,8 @@ export const PATCH = async (
           to_char("dueDate", 'YYYY-MM-DD') AS "dueDate",
           "category",
           "completed",
-          "progress"
+          "progress",
+          to_char("completedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS "completedAt"
       `,
       values,
     );
@@ -100,6 +129,34 @@ export const PATCH = async (
 
     if (!row) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    // Handle XP changes for completing/uncompleting tasks
+    if (isCompletingTask || isUncompletingTask) {
+      const completedAt = new Date();
+      const dueDate = taskDueDate ? new Date(taskDueDate) : null;
+      let xpChange = 0;
+
+      if (dueDate) {
+        const completedDate = new Date(completedAt.toDateString());
+        const dueDateOnly = new Date(dueDate.toDateString());
+
+        if (completedDate <= dueDateOnly) {
+          xpChange = 10;
+        } else {
+          xpChange = 5;
+        }
+      } else {
+        xpChange = 10;
+      }
+
+      // Add XP for completing, subtract XP for uncompleting
+      const xpModifier = isCompletingTask ? xpChange : -xpChange;
+
+      await db.query(
+        `UPDATE "user" SET "xp" = GREATEST(COALESCE("xp", 0) + $1, 0) WHERE "id" = $2`,
+        [xpModifier, user.id],
+      );
     }
 
     return NextResponse.json(mapRowToTask(row));

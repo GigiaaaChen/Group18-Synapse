@@ -15,6 +15,7 @@ interface TaskStore {
   ) => Promise<void>;
   toggleTask: (id: string, token: string) => Promise<void>;
   deleteTask: (id: string, token: string) => Promise<void>;
+  dismissTask: (id: string, token: string) => Promise<void>;
   updateTask: (
     id: string,
     updates: Partial<Omit<Task, "id">>,
@@ -37,6 +38,7 @@ const parseTask = (task: Task): Task => ({
   category: task.category,
   completed: task.completed,
   progress: task.progress,
+  completedAt: task.completedAt ?? null,
 });
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -145,6 +147,35 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
           error instanceof Error
             ? error.message
             : "Failed to delete task. Please try again.",
+      });
+      throw error;
+    }
+  },
+
+  dismissTask: async (id, token) => {
+    set({ error: null });
+    try {
+      const response = await fetch(`${API_BASE}/${id}/dismiss`, {
+        method: "POST",
+        headers: withAuth(token),
+      });
+
+      if (!response.ok) {
+        const { error } = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(error || "Failed to dismiss task");
+      }
+
+      set((state) => ({
+        tasks: state.tasks.filter((task) => task.id !== id),
+      }));
+    } catch (error) {
+      set({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to dismiss task. Please try again.",
       });
       throw error;
     }

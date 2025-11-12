@@ -5,6 +5,7 @@ export interface Task {
   category: string;
   completed: boolean;
   progress: number;
+  completedAt: string | null;
 }
 
 export interface TaskDraft {

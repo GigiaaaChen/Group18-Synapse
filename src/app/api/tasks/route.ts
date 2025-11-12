@@ -12,6 +12,7 @@ interface TaskRow {
   category: string;
   completed: boolean;
   progress: number;
+  completedAt: string | null;
 }
 
 const mapRowToTask = (row: TaskRow): Task => ({
@@ -21,6 +22,7 @@ const mapRowToTask = (row: TaskRow): Task => ({
   category: row.category,
   completed: row.completed,
   progress: row.progress,
+  completedAt: row.completedAt,
 });
 
 const sanitizeDraft = (draft: TaskDraft) => {
@@ -55,7 +57,8 @@ export const GET = async (request: NextRequest) => {
           to_char("dueDate", 'YYYY-MM-DD') AS "dueDate",
           "category",
           "completed",
-          "progress"
+          "progress",
+          to_char("completedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS "completedAt"
         FROM "task"
         WHERE "userId" = $1
         ORDER BY "createdAt" DESC
@@ -109,7 +112,8 @@ export const POST = async (request: NextRequest) => {
           to_char("dueDate", 'YYYY-MM-DD') AS "dueDate",
           "category",
           "completed",
-          "progress"
+          "progress",
+          to_char("completedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS "completedAt"
       `,
       [
         id,
