@@ -6,6 +6,7 @@ import { signOut, useSession } from "@/lib/auth-client";
 import { useTaskStore } from "@/stores/taskStore";
 import { Tooltip } from "@/components/Tooltip";
 import { TasksIcon, FriendsIcon, SynapseLogo } from "@/components/icons";
+import { SlidingNumber } from "@/components/SlidingNumber";
 
 export default function TaskPage() {
   const { data: session, isPending } = useSession();
@@ -15,6 +16,7 @@ export default function TaskPage() {
   const taskError = useTaskStore((state) => state.error);
   const fetchTasks = useTaskStore((state) => state.fetchTasks);
   const addTask = useTaskStore((state) => state.addTask);
+  const updateTask = useTaskStore((state) => state.updateTask);
   const updateTaskProgress = useTaskStore((state) => state.updateTaskProgress);
   const toggleTask = useTaskStore((state) => state.toggleTask);
   const setError = useTaskStore((state) => state.setError);
@@ -25,6 +27,19 @@ export default function TaskPage() {
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [userXp, setUserXp] = useState((session?.user as any)?.xp ?? 0);
+  const [activeTimer, setActiveTimer] = useState<{
+    id: string;
+    taskid: string;
+    startedat: string;
+    title: string;
+    category: string;
+  } | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [taskTimes, setTaskTimes] = useState<{ [key: string]: number }>({});
+  const [editingDueDate, setEditingDueDate] = useState<string | null>(null);
+  const [tempDueDate, setTempDueDate] = useState<string>("");
+  const [sortField, setSortField] = useState<"progress" | "dueDate" | "status" | "category" | null>("status");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -44,6 +59,144 @@ export default function TaskPage() {
       setUserXp((session.user as any)?.xp ?? 0);
     }
   }, [session]);
+
+  // Fetch active timer and total times on mount
+  useEffect(() => {
+    if (!authToken) return;
+    fetchActiveTimer();
+    fetchTotalTimes();
+  }, [authToken]);
+
+  const fetchTotalTimes = async () => {
+    if (!authToken) return;
+    try {
+      const response = await fetch("/api/tasks/timer/total", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTaskTimes(data.timeByTask);
+      }
+    } catch (err) {
+      console.error("Failed to fetch total times", err);
+    }
+  };
+
+  // Update elapsed time every second
+  useEffect(() => {
+    if (!activeTimer) {
+      setElapsedTime(0);
+      return;
+    }
+
+    const updateElapsed = () => {
+      const start = new Date(activeTimer.startedat).getTime();
+      const now = Date.now();
+      const elapsed = Math.floor((now - start) / 1000);
+      setElapsedTime(elapsed);
+    };
+
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeTimer]);
+
+  const fetchActiveTimer = async () => {
+    if (!authToken) return;
+    try {
+      const response = await fetch("/api/tasks/timer/active", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setActiveTimer(data.activeTimer);
+      }
+    } catch (err) {
+      console.error("Failed to fetch active timer", err);
+    }
+  };
+
+  const startTimer = async (taskId: string) => {
+    if (!authToken) return;
+    try {
+      const response = await fetch("/api/tasks/timer/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ taskId }),
+      });
+
+      if (response.ok) {
+        await fetchActiveTimer();
+      }
+    } catch (err) {
+      console.error("Failed to start timer", err);
+    }
+  };
+
+  const stopTimer = async () => {
+    if (!authToken) return;
+    try {
+      const response = await fetch("/api/tasks/timer/stop", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update pet happiness in UI
+        if (session?.user) {
+          const currentHappiness = (session.user as any)?.petHappiness ?? 100;
+          const newHappiness = Math.min(currentHappiness + data.carePoints, 100);
+          // Update session would require refetch, so we'll just refetch active timer
+        }
+        setActiveTimer(null);
+        setElapsedTime(0);
+        // Refresh total times after stopping
+        await fetchTotalTimes();
+      }
+    } catch (err) {
+      console.error("Failed to stop timer", err);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const handleDueDateEdit = (taskId: string, currentDate: string | null) => {
+    setEditingDueDate(taskId);
+    setTempDueDate(currentDate || "");
+  };
+
+  const handleDueDateSave = async (taskId: string) => {
+    if (!authToken) return;
+    try {
+      await updateTask(taskId, { dueDate: tempDueDate || null }, authToken);
+      setEditingDueDate(null);
+      setTempDueDate("");
+    } catch (err) {
+      console.error("Failed to update due date", err);
+    }
+  };
+
+  const handleDueDateCancel = () => {
+    setEditingDueDate(null);
+    setTempDueDate("");
+  };
 
   const handleAddTask = async () => {
     if (taskTitle.trim() === "") return;
@@ -83,11 +236,62 @@ export default function TaskPage() {
   const activeTasks = tasks.filter((t) => !t.completed && !isOverdue(t));
   const completedTasks = tasks.filter((t) => t.completed);
 
+  const handleSort = (field: "progress" | "dueDate" | "status" | "category") => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else {
+        setSortField(null);
+        setSortDirection("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const getStatusValue = (task: typeof tasks[0]) => {
+    if (task.completed) return 3; // Done last
+    if (isOverdue(task)) return 1; // Overdue first
+    return 2; // In progress middle
+  };
+
+  const sortTasks = (tasksToSort: typeof tasks) => {
+    // Default sort by status if no sort field selected
+    const fieldToSort = sortField || "status";
+
+    return [...tasksToSort].sort((a, b) => {
+      let comparison = 0;
+
+      switch (fieldToSort) {
+        case "progress":
+          comparison = a.progress - b.progress;
+          break;
+        case "dueDate":
+          const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+          const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+          comparison = dateA - dateB;
+          break;
+        case "status":
+          comparison = getStatusValue(a) - getStatusValue(b);
+          break;
+        case "category":
+          comparison = a.category.localeCompare(b.category);
+          break;
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  };
+
   const filteredTasks = () => {
-    if (activeTab === "overdue") return overdueTasks;
-    if (activeTab === "active") return activeTasks;
-    if (activeTab === "completed") return completedTasks;
-    return tasks;
+    let filtered;
+    if (activeTab === "overdue") filtered = overdueTasks;
+    else if (activeTab === "active") filtered = activeTasks;
+    else if (activeTab === "completed") filtered = completedTasks;
+    else filtered = tasks;
+
+    return sortTasks(filtered);
   };
 
   const handleSignOut = async () => {
@@ -234,7 +438,7 @@ export default function TaskPage() {
               width: '36px',
               height: '36px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              background: '#4972e1',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -262,8 +466,16 @@ export default function TaskPage() {
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap'
               }}>
-                {userXp} XP
+                @{(session.user as any).username || 'username'}
               </div>
+            </div>
+            <div style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              color: '#a5b4fc',
+              whiteSpace: 'nowrap'
+            }}>
+              {userXp} XP
             </div>
           </div>
           <button
@@ -272,12 +484,12 @@ export default function TaskPage() {
             onMouseLeave={() => setHoveredButton(null)}
             style={{
               width: '100%',
-              padding: '10px 16px',
+              padding: '6px 10px',
               borderRadius: '6px',
-              border: '1px solid #2a2a2a',
-              background: hoveredButton === 'signout' ? '#1a1a1a' : 'transparent',
-              color: '#9ca3af',
-              fontSize: '14px',
+              border: 'none',
+              background: hoveredButton === 'signout' ? '#7f1d1d' : '#991b1b',
+              color: '#fca5a5',
+              fontSize: '12px',
               fontWeight: '500',
               cursor: 'pointer',
               transition: 'all 0.2s ease'
@@ -419,15 +631,13 @@ export default function TaskPage() {
                   padding: '14px 24px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: hoveredButton === 'create-task'
-                    ? 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)'
-                    : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  background: hoveredButton === 'create-task' ? '#91aaed' : '#4972e1',
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: '600',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
-                  boxShadow: hoveredButton === 'create-task' ? '0 8px 16px rgba(99, 102, 241, 0.3)' : '0 4px 12px rgba(99, 102, 241, 0.2)',
+                  boxShadow: hoveredButton === 'create-task' ? '0 8px 16px rgba(73, 114, 225, 0.3)' : '0 4px 12px rgba(73, 114, 225, 0.2)',
                   transform: hoveredButton === 'create-task' ? 'translateY(-1px)' : 'translateY(0)'
                 }}
               >
@@ -455,15 +665,30 @@ export default function TaskPage() {
                 padding: '8px 16px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === "all" ? '#1a1a1a' : (hoveredButton === 'tab-all' ? '#161616' : 'transparent'),
+                background: activeTab === "all" ? '#2a2a2a' : (hoveredButton === 'tab-all' ? '#1a1a1a' : 'transparent'),
                 color: activeTab === "all" ? '#eeeeee' : '#9ca3af',
                 fontSize: '14px',
                 fontWeight: '500',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
             >
               All
+              {tasks.length > 0 && (
+                <span style={{
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  background: 'rgba(156, 163, 175, 0.2)',
+                  color: '#9ca3af',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}>
+                  {tasks.length}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab("overdue")}
@@ -473,7 +698,7 @@ export default function TaskPage() {
                 padding: '8px 16px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === "overdue" ? '#1a1a1a' : (hoveredButton === 'tab-overdue' ? '#161616' : 'transparent'),
+                background: activeTab === "overdue" ? '#2a2a2a' : (hoveredButton === 'tab-overdue' ? '#1a1a1a' : 'transparent'),
                 color: activeTab === "overdue" ? '#eeeeee' : '#9ca3af',
                 fontSize: '14px',
                 fontWeight: '500',
@@ -506,7 +731,7 @@ export default function TaskPage() {
                 padding: '8px 16px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === "active" ? '#1a1a1a' : (hoveredButton === 'tab-active' ? '#161616' : 'transparent'),
+                background: activeTab === "active" ? '#2a2a2a' : (hoveredButton === 'tab-active' ? '#1a1a1a' : 'transparent'),
                 color: activeTab === "active" ? '#eeeeee' : '#9ca3af',
                 fontSize: '14px',
                 fontWeight: '500',
@@ -539,15 +764,30 @@ export default function TaskPage() {
                 padding: '8px 16px',
                 borderRadius: '6px',
                 border: 'none',
-                background: activeTab === "completed" ? '#1a1a1a' : (hoveredButton === 'tab-completed' ? '#161616' : 'transparent'),
+                background: activeTab === "completed" ? '#2a2a2a' : (hoveredButton === 'tab-completed' ? '#1a1a1a' : 'transparent'),
                 color: activeTab === "completed" ? '#eeeeee' : '#9ca3af',
                 fontSize: '14px',
                 fontWeight: '500',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
             >
               Completed
+              {completedTasks.length > 0 && (
+                <span style={{
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: '#6ee7b7',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}>
+                  {completedTasks.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -571,41 +811,104 @@ export default function TaskPage() {
                     fontWeight: '500',
                     color: '#9ca3af'
                   }}>Task</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: '#9ca3af'
-                  }}>Category</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: '#9ca3af'
-                  }}>Status</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: '#9ca3af'
-                  }}>Due Date</th>
+                  <th
+                    onClick={() => handleSort("category")}
+                    style={{
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: sortField === "category" ? '#eeeeee' : '#9ca3af',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Category
+                      {sortField === "category" && (
+                        <span style={{ fontSize: '10px' }}>
+                          {sortDirection === "asc" ? "▲" : "▼"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort("status")}
+                    style={{
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: sortField === "status" ? '#eeeeee' : '#9ca3af',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Status
+                      {sortField === "status" && (
+                        <span style={{ fontSize: '10px' }}>
+                          {sortDirection === "asc" ? "▲" : "▼"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort("dueDate")}
+                    style={{
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: sortField === "dueDate" ? '#eeeeee' : '#9ca3af',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Due Date
+                      {sortField === "dueDate" && (
+                        <span style={{ fontSize: '10px' }}>
+                          {sortDirection === "asc" ? "▲" : "▼"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort("progress")}
+                    style={{
+                      padding: '12px 16px',
+                      textAlign: 'right',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: sortField === "progress" ? '#eeeeee' : '#9ca3af',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                      Progress
+                      {sortField === "progress" && (
+                        <span style={{ fontSize: '10px' }}>
+                          {sortDirection === "asc" ? "▲" : "▼"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
                   <th style={{
                     padding: '12px 16px',
                     textAlign: 'right',
                     fontSize: '13px',
                     fontWeight: '500',
                     color: '#9ca3af'
-                  }}>Progress</th>
-                  <th style={{ width: '100px', padding: '12px 16px' }}></th>
+                  }}>Timer</th>
+                  <th style={{ width: '50px', padding: '12px 16px' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {isLoadingTasks ? (
                   <tr>
-                    <td colSpan={7} style={{
+                    <td colSpan={8} style={{
                       padding: '48px',
                       textAlign: 'center',
                       color: '#9ca3af',
@@ -616,7 +919,7 @@ export default function TaskPage() {
                   </tr>
                 ) : filteredTasks().length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{
+                    <td colSpan={8} style={{
                       padding: '48px',
                       textAlign: 'center',
                       color: '#9ca3af',
@@ -670,7 +973,7 @@ export default function TaskPage() {
                               height: '20px',
                               borderRadius: '6px',
                               border: task.completed ? 'none' : '2px solid #4b5563',
-                              background: task.completed ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : 'transparent',
+                              background: task.completed ? '#4972e1' : 'transparent',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
@@ -753,8 +1056,9 @@ export default function TaskPage() {
                             alignItems: 'center',
                             padding: '4px 10px',
                             borderRadius: '6px',
-                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                            color: '#fca5a5',
+                            background: 'rgba(216, 64, 64, 0.2)',
+                            border: '0.5px solid rgba(216, 64, 64, 0.6)',
+                            color: '#fff',
                             fontSize: '12px',
                             fontWeight: '500'
                           }}>
@@ -799,7 +1103,56 @@ export default function TaskPage() {
                         color: '#9ca3af',
                         fontSize: '14px'
                       }}>
-                        {formatDate(task.dueDate)}
+                        {editingDueDate === task.id ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="date"
+                              value={tempDueDate}
+                              onChange={(e) => setTempDueDate(e.target.value)}
+                              onBlur={() => handleDueDateSave(task.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleDueDateSave(task.id);
+                                if (e.key === 'Escape') handleDueDateCancel();
+                              }}
+                              autoFocus
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid #2a2a2a',
+                                background: '#161616',
+                                color: '#eeeeee',
+                                fontSize: '13px',
+                                outline: 'none'
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>{formatDate(task.dueDate)}</span>
+                            <Tooltip text="Edit due date">
+                              <button
+                                onClick={() => handleDueDateEdit(task.id, task.dueDate)}
+                                onMouseEnter={() => setHoveredButton(`edit-date-${task.id}`)}
+                                onMouseLeave={() => setHoveredButton(null)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  transition: 'all 0.2s ease',
+                                  transform: hoveredButton === `edit-date-${task.id}` ? 'scale(1.1)' : 'scale(1)'
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
+                                  <path fill="#edcc91" d="M7.243 22H3a1 1 0 0 1-1-1v-4.243a1 1 0 0 1 .293-.707l13.76-13.757a1 1 0 0 1 1.414 0l4.24 4.24a1 1 0 0 1 0 1.414L7.95 21.707a1 1 0 0 1-.707.293Z"></path>
+                                  <path fill="#e1aa49" d="m21.707 6.533-4.24-4.24a1 1 0 0 0-1.414 0L12.515 5.83l5.655 5.653 3.537-3.536a1 1 0 0 0 0-1.414Z"></path>
+                                </svg>
+                              </button>
+                            </Tooltip>
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '12px 16px' }}>
                         <div style={{
@@ -812,7 +1165,7 @@ export default function TaskPage() {
                             onClick={() => {
                               if (!authToken) return;
                               setError(null);
-                              const newProgress = Math.max(0, task.progress - 25);
+                              const newProgress = Math.max(0, task.progress - 10);
                               updateTaskProgress(task.id, newProgress, authToken).catch(() => {});
                             }}
                             onMouseEnter={() => setHoveredButton(`dec-${task.id}`)}
@@ -875,7 +1228,7 @@ export default function TaskPage() {
                             onClick={() => {
                               if (!authToken) return;
                               setError(null);
-                              const newProgress = Math.min(100, task.progress + 25);
+                              const newProgress = Math.min(100, task.progress + 10);
                               updateTaskProgress(task.id, newProgress, authToken).catch(() => {});
                             }}
                             onMouseEnter={() => setHoveredButton(`inc-${task.id}`)}
@@ -898,6 +1251,79 @@ export default function TaskPage() {
                           >
                             +
                           </button>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'flex-end' }}>
+                          <div style={{
+                            fontSize: '18px',
+                            fontWeight: '500',
+                            color: '#9ca3af',
+                            fontFamily: '"SF Mono", "Roboto Mono", "Consolas", monospace',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {(() => {
+                              const baseTime = taskTimes[task.id] || 0;
+                              const currentTime = activeTimer?.taskid === task.id ? baseTime + elapsedTime : baseTime;
+                              return (
+                                <>
+                                  <SlidingNumber value={Math.floor(currentTime / 60)} padStart />
+                                  <span>:</span>
+                                  <SlidingNumber value={currentTime % 60} padStart />
+                                </>
+                              );
+                            })()}
+                          </div>
+                          {activeTimer?.taskid === task.id ? (
+                            <Tooltip text="Click to stop timer">
+                              <button
+                                onClick={stopTimer}
+                                onMouseEnter={() => setHoveredButton(`stop-timer-${task.id}`)}
+                                onMouseLeave={() => setHoveredButton(null)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  transition: 'all 0.2s ease',
+                                  transform: hoveredButton === `stop-timer-${task.id}` ? 'scale(1.15)' : 'scale(1)'
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
+                                  <path fill="#f472b6" d="M16 22a3.003 3.003 0 0 1-3-3V5a3 3 0 0 1 6 0v14a3.003 3.003 0 0 1-3 3zm-8 0a3.003 3.003 0 0 1-3-3V5a3 3 0 0 1 6 0v14a3.003 3.003 0 0 1-3 3z"></path>
+                                </svg>
+                              </button>
+                            </Tooltip>
+                          ) : (
+                            <Tooltip text={activeTimer ? "Another timer is running" : "Click to start timer"}>
+                              <button
+                                onClick={() => startTimer(task.id)}
+                                disabled={!!activeTimer}
+                                onMouseEnter={() => setHoveredButton(`start-timer-${task.id}`)}
+                                onMouseLeave={() => setHoveredButton(null)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: activeTimer ? 'not-allowed' : 'pointer',
+                                  padding: 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  transition: 'all 0.2s ease',
+                                  transform: !activeTimer && hoveredButton === `start-timer-${task.id}` ? 'scale(1.15)' : 'scale(1)',
+                                  opacity: activeTimer ? 0.3 : 1
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
+                                  <path fill="#34d399" d="M7.168 21.002a3.428 3.428 0 0 1-3.416-3.42V6.418a3.416 3.416 0 0 1 5.124-2.958l9.664 5.581a3.416 3.416 0 0 1 0 5.916l-9.664 5.581a3.41 3.41 0 0 1-1.708.463Z"></path>
+                                </svg>
+                              </button>
+                            </Tooltip>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: '12px 16px' }}>

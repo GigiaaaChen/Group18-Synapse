@@ -434,7 +434,7 @@ export default function FriendsPage() {
               width: '36px',
               height: '36px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              background: '#4972e1',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -462,8 +462,16 @@ export default function FriendsPage() {
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap'
               }}>
-                {userXp} XP
+                @{(session.user as any).username || 'username'}
               </div>
+            </div>
+            <div style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              color: '#a5b4fc',
+              whiteSpace: 'nowrap'
+            }}>
+              {userXp} XP
             </div>
           </div>
           <button
@@ -472,12 +480,12 @@ export default function FriendsPage() {
             onMouseLeave={() => setHoveredButton(null)}
             style={{
               width: '100%',
-              padding: '10px 16px',
+              padding: '6px 10px',
               borderRadius: '6px',
-              border: '1px solid #2a2a2a',
-              background: hoveredButton === 'signout' ? '#1a1a1a' : 'transparent',
-              color: '#9ca3af',
-              fontSize: '14px',
+              border: 'none',
+              background: hoveredButton === 'signout' ? '#7f1d1d' : '#991b1b',
+              color: '#fca5a5',
+              fontSize: '12px',
               fontWeight: '500',
               cursor: 'pointer',
               transition: 'all 0.2s ease'
@@ -632,7 +640,7 @@ export default function FriendsPage() {
                           width: '40px',
                           height: '40px',
                           borderRadius: '8px',
-                          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                          background: '#4972e1',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -675,9 +683,7 @@ export default function FriendsPage() {
                           padding: '8px 16px',
                           borderRadius: '6px',
                           border: 'none',
-                          background: hoveredButton === `add-${result.id}`
-                            ? 'linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)'
-                            : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                          background: hoveredButton === `add-${result.id}` ? '#91aaed' : '#4972e1',
                           color: '#ffffff',
                           fontSize: '13px',
                           fontWeight: '600',
@@ -804,7 +810,7 @@ export default function FriendsPage() {
                       width: '48px',
                       height: '48px',
                       borderRadius: '10px',
-                      background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                      background: '#4972e1',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -904,7 +910,7 @@ export default function FriendsPage() {
                       width: '48px',
                       height: '48px',
                       borderRadius: '10px',
-                      background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                      background: '#4972e1',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
