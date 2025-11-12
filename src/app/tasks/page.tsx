@@ -67,7 +67,6 @@ export default function TaskPage() {
       setTaskTitle("");
       setTaskDate("");
       setTaskCategory("personal");
-      setShowForm(false);
     } catch {}
   };
 
@@ -678,9 +677,9 @@ export default function TaskPage() {
 
                             // Add XP when completing, remove XP when uncompleting
                             if (!wasCompleted) {
-                              setUserXp(prev => prev + xpChange);
+                              setUserXp((prev: number) => prev + xpChange);
                             } else {
-                              setUserXp(prev => Math.max(0, prev - xpChange));
+                              setUserXp((prev: number) => Math.max(0, prev - xpChange));
                             }
                           }}
                           style={{
