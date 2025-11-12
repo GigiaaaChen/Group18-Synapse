@@ -97,3 +97,27 @@ export function FriendsIcon({ active = false, width = 20, height = 20 }: IconPro
     </svg>
   );
 }
+
+export function PetIcon({ active = false, width = 20, height = 20 }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={width}
+      height={height}
+    >
+      {/* toe beans */}
+      <circle cx="7.2" cy="8.2" r="2.1" fill={active ? "#91aaed" : "#4a5568"} />
+      <circle cx="12.0" cy="7.0" r="2.1" fill={active ? "#b6c6f3" : "#5a6478"} />
+      <circle cx="16.8" cy="8.2" r="2.1" fill={active ? "#91aaed" : "#4a5568"} />
+      <circle cx="9.6" cy="5.8" r="1.6" fill={active ? "#b6c6f3" : "#5a6478"} />
+
+      {/* paw base */}
+      <path
+        d="M6 15.7c0-2.7 2.9-4.9 6-4.9s6 2.2 6 4.9c0 2.4-2.4 4.3-6 4.3s-6-1.9-6-4.3z"
+        fill={active ? "#4972e1" : "#2d3748"}
+      />
+    </svg>
+  );
+}
+
