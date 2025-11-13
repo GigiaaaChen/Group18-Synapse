@@ -266,6 +266,56 @@ export default function TaskPage() {
     setTempDueDate("");
   };
 
+  /********** delete task */
+  const handleDeleteTask = async (task: typeof tasks[0]) => {
+    if (!authToken) return;
+
+    try {
+      setError(null);
+
+      // Figure out how much XP this task is worth (same logic as toggle)
+      let xpChange = 0;
+      if (task.completed) {
+        const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        xpChange = 10; // default on-time / no due date
+        if (dueDate) {
+          const due = new Date(dueDate);
+          due.setHours(0, 0, 0, 0);
+          if (today > due) {
+            xpChange = 5; // late
+          }
+        }
+      }
+
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      if (response.ok) {
+        // Update XP in UI: deleting a completed task removes its XP
+        if (task.completed && xpChange > 0) {
+          setUserXp((prev: number) => Math.max(0, prev - xpChange));
+        }
+
+        // Refresh tasks so the deleted one disappears
+        await fetchTasks(authToken);
+      } else {
+        const data = await response.json().catch(() => null);
+        setError(data?.error || "Failed to delete task");
+      }
+    } catch (err) {
+      console.error("Failed to delete task", err);
+      setError("Failed to delete task");
+    }
+  };
+  /********** delete task */
+
   const handleAddTask = async () => {
     if (taskTitle.trim() === "") return;
     if (!authToken) {
@@ -1671,7 +1721,33 @@ export default function TaskPage() {
                             )}
                           </div>
                         </td>
-                        <td style={{ padding: '12px 16px' }}>
+                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                          <Tooltip text="Delete task">
+                            <button
+                              onClick={() => handleDeleteTask(task)}
+                              onMouseEnter={() => setHoveredButton(`delete-${task.id}`)}
+                              onMouseLeave={() => setHoveredButton(null)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                transition: 'all 0.2s ease',
+                                transform: hoveredButton === `delete-${task.id}` ? 'scale(1.15)' : 'scale(1)'
+                              }}
+                            >
+                              {/* simple trash icon */}
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" style={{ marginTop: '5px' }}>
+                                <path
+                                  fill="#fca5a5"
+                                  d="M9 3a1 1 0 0 0-1 1v1H5.5a1 1 0 1 0 0 2H6v11a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7h.5a1 1 0 1 0 0-2H16V4a1 1 0 0 0-1-1H9zm2 4a1 1 0 0 0-1 1v9a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1zm4 0a1 1 0 0 0-1 1v9a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1z"
+                                />
+                              </svg>
+                            </button>
+                          </Tooltip>
                         </td>
                       </tr>
                     ))

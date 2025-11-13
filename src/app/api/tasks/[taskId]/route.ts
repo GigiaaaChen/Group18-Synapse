@@ -216,6 +216,66 @@ export const DELETE = async (
   try {
     const { taskId } = await params;
     const user = await requireUser(request);
+
+    /********** deleting task and modifying current xp */ 
+    const existing = await db.query(
+      `
+        SELECT "completed", "dueDate", "completedAt"
+        FROM "task"
+        WHERE "userId" = $1
+          AND "id" = $2
+      `,
+      [user.id, taskId],
+    );
+
+    const row = existing.rows[0] as
+      | { completed: boolean; dueDate: string | null; completedAt: string | null }
+      | undefined; // using typescript type assertion
+
+    if (!row) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    // If the task was completed, subtract the XP it had given
+    let xpModifier = 0;
+
+    if (row.completed) {
+      const dueDate = row.dueDate ? new Date(row.dueDate) : null;
+      const completedAt = row.completedAt ? new Date(row.completedAt) : new Date();
+
+      let xpChange = 0;
+
+      if (dueDate) {
+        const completedDate = new Date(completedAt.toDateString());
+        const dueDateOnly = new Date(dueDate.toDateString());
+
+        // on time
+        if (completedDate <= dueDateOnly) {
+          xpChange = 10; 
+        } 
+        // late
+        else {
+          xpChange = 5; 
+        }
+      } 
+      // no due date
+      else {
+        xpChange = 10;
+      }
+
+      // Deleting a completed task should REMOVE that XP
+      xpModifier = -xpChange;
+    }
+
+    if (xpModifier !== 0) {
+      await db.query(
+        `UPDATE "user" SET "xp" = GREATEST(COALESCE("xp", 0) + $1, 0) WHERE "id" = $2`,
+        [xpModifier, user.id],
+      );
+    }
+
+    /********** finished deleting task and modifying current xp */
+
     const result = await db.query(
       `
         DELETE FROM "task"
