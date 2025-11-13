@@ -1,8 +1,3 @@
-BEGIN;
-
--- ========================================
--- GOALS TABLE (similar style to "task")
--- ========================================
 CREATE TABLE IF NOT EXISTS "goal" (
     "id" TEXT PRIMARY KEY,
     "userId" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
@@ -24,10 +19,6 @@ CREATE TABLE IF NOT EXISTS "goal" (
 CREATE INDEX IF NOT EXISTS "idx_goal_user" ON "goal" ("userId");
 CREATE INDEX IF NOT EXISTS "idx_goal_endDate" ON "goal" ("endDate");
 
-
--- ========================================
--- GOAL OCCURRENCES TABLE
--- ========================================
 CREATE TABLE IF NOT EXISTS "goal_occurrence" (
     "id" TEXT PRIMARY KEY,
     "goalId" TEXT NOT NULL REFERENCES "goal"("id") ON DELETE CASCADE,
@@ -62,10 +53,6 @@ CREATE TRIGGER trg_occ_deadline_1159pm
 BEFORE INSERT OR UPDATE ON "goal_occurrence"
 FOR EACH ROW EXECUTE FUNCTION enforce_1159pm_deadline();
 
-
--- ========================================
--- AUTO-CLEANUP WHEN GOAL END DATE PASSES
--- ========================================
 CREATE OR REPLACE FUNCTION expire_old_occurrences()
 RETURNS VOID AS $$
 BEGIN
@@ -74,4 +61,3 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMIT;
