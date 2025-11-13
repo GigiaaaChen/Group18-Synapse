@@ -11,7 +11,12 @@ import { SlidingNumber } from "@/components/SlidingNumber";
 export default function GoalsPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
-  const userXpFromSession = (session?.user as any)?.xp ?? 0;
+
+  // XP behaves same as Tasks/Friends
+  const [userXp, setUserXp] = useState<number>(() => {
+    const xp = (session?.user as any)?.xp;
+    return typeof xp === "number" ? xp : 0;
+  });
 
   const goals = useGoalStore((s) => s.goals);
   const occurrences = useGoalStore((s) => s.occurrences);
@@ -21,7 +26,6 @@ export default function GoalsPage() {
   const deleteGoal = useGoalStore((s) => s.deleteGoal);
 
   const isLoadingGoals = useGoalStore((s) => s.isLoading);
-  const [userXp, setUserXp] = useState(userXpFromSession);
 
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
