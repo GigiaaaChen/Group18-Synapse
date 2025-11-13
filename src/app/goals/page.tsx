@@ -1,365 +1,996 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { CSSProperties } from "react";
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useGoalStore } from "@/stores/goalStore";
-import type { GoalCategory, GoalPeriod } from "@/types/goal";
-
-const categories: GoalCategory[] = ["personal", "work", "health", "study"];
-const periods: GoalPeriod[] = ["daily", "weekly"];
+import { Tooltip } from "@/components/Tooltip";
+import { TasksIcon, FriendsIcon, PetIcon, GoalsIcon, SynapseLogo } from "@/components/icons";
+import { SlidingNumber } from "@/components/SlidingNumber";
 
 export default function GoalsPage() {
-  const { data: session, isPending } = useSession();
   const router = useRouter();
+  const { data: session, isPending } = useSession();
+  const userXpFromSession = (session?.user as any)?.xp ?? 0;
 
-  const {
-    goals,
-    progress,
-    isLoading,
-    error,
-    fetchGoals,
-    fetchSummary,
-    upsertGoal,
-    setError,
-  } = useGoalStore();
+  const goals = useGoalStore((s) => s.goals);
+  const occurrences = useGoalStore((s) => s.occurrences);
+  const fetchGoals = useGoalStore((s) => s.fetchGoals);
+  const createGoal = useGoalStore((s) => s.createGoal);
+  const completeOccurrence = useGoalStore((s) => s.completeOccurrence);
+  const deleteGoal = useGoalStore((s) => s.deleteGoal);
 
-  // --- DEMO MODE AUTH HANDLING ---
-  const isDemo = !session; // if no session, show demo
-  const userId =
-    (session as any)?.user?.id ||
-    (session as any)?.user?.email ||
-    "demo-user-1";
-  const token = session?.session?.token || "demo-token";
+  const isLoadingGoals = useGoalStore((s) => s.isLoading);
+  const [userXp, setUserXp] = useState(userXpFromSession);
+
+  const [hoveredButton, setHoveredButton] = useState<string | null>(null);
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+
+  // -------------------------
+  // CREATE GOAL FORM STATE
+  // -------------------------
+  const [goalTitle, setGoalTitle] = useState("");
+  const [goalCategory, setGoalCategory] = useState("personal");
+  const [frequency, setFrequency] = useState<"daily" | "weekly">("daily");
+  const [repeatDay, setRepeatDay] = useState<number>(0); // Sunday default
+  const [endDate, setEndDate] = useState("");
+
+  // -------------------------
+  // PAGE TABS
+  // -------------------------
+  const [activeTab, setActiveTab] = useState<"inprogress" | "completed">("inprogress");
+
+  // -------------------------------------
+  // AUTH + FETCH GOALS ON PAGE LOAD
+  // -------------------------------------
+  const authToken = session?.session?.token;
 
   useEffect(() => {
-    if (!token) return;
-    fetchGoals(token)
-      .then(() => fetchSummary(token))
-      .catch(() => {});
-  }, [token, fetchGoals, fetchSummary]);
+    if (!isPending && !session) router.push("/signin");
+  }, [isPending, session, router]);
 
-  const containerStyle: CSSProperties = {
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: "20px",
-    fontFamily: "Arial, sans-serif",
-  };
+  useEffect(() => {
+    if (!authToken) return;
+    fetchGoals(authToken);
+  }, [authToken, fetchGoals]);
 
-  const boxStyle: CSSProperties = {
-    backgroundColor: "white",
-    padding: "40px",
-    borderRadius: "20px",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-    maxWidth: "900px",
-    width: "100%",
-    maxHeight: "90vh",
-    overflow: "auto",
-  };
-
-  const card: CSSProperties = {
-    background: "#fafafa",
-    borderRadius: 12,
-    border: "1px solid #eee",
-    padding: 16,
-  };
-
-  const track: CSSProperties = {
-    width: "100%",
-    height: 12,
-    background: "#e2e8f0",
-    borderRadius: 999,
-    overflow: "hidden",
-  };
-
-  const fill = (pct: number): CSSProperties => ({
-    height: "100%",
-    width: `${Math.min(100, Math.max(0, Math.round(pct)))}%`,
-    background: "#111827",
-    transition: "width .2s ease",
-  });
-
-  const pill = (ok: boolean): CSSProperties => ({
-    padding: "2px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 700,
-    background: ok ? "#e8f5e9" : "#eef2ff",
-    color: ok ? "#1b5e20" : "#1e3a8a",
-    border: `1px solid ${ok ? "#81c784" : "#c7d2fe"}`,
-  });
-
-  const btn = (bg: string, color: string): CSSProperties => ({
-    backgroundColor: bg,
-    color,
-    border: "none",
-    padding: "8px 16px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "14px",
-    textDecoration: "none",
-    display: "inline-block",
-  });
-
-  const [form, setForm] = useState<{ [key: string]: number | "" }>({});
-
-  const existing = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const g of goals) map[`${g.category}:${g.period}`] = g.minutesTarget;
-    return map;
-  }, [goals]);
-
-  const handleSave = async (category: GoalCategory, period: GoalPeriod) => {
-    if (isDemo) {
-      alert("Demo mode: changes are not saved.");
-      return;
+  useEffect(() => {
+    if (session?.user) {
+      setUserXp((session.user as any)?.xp ?? 0);
     }
-    if (!token) return;
-    setError(null);
-    const key = `${category}:${period}`;
-    const raw = form[key];
-    const minutesTarget = typeof raw === "number" ? raw : existing[key] || 0;
-    await upsertGoal({ category, period, minutesTarget }, token);
+  }, [session]);
+
+  // -------------------------
+  // HELPERS
+  // -------------------------
+
+  const todayDate = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
   };
 
-  const getSummary = (category: GoalCategory, period: GoalPeriod) => {
-    return (
-      progress.find((p) => p.category === category && p.period === period) || {
-        category,
-        period,
-        minutesTarget: existing[`${category}:${period}`] ?? 0,
-        minutesLogged: 0,
-        minutesRemaining: existing[`${category}:${period}`] ?? 0,
-        met: false,
-      }
-    );
+  const getWeekStartSunday = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    d.setDate(d.getDate() - day); // back to Sunday
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const formatCountdown = (deadlineStr: string) => {
+    const deadline = new Date(deadlineStr).getTime();
+    const now = Date.now();
+    const diff = deadline - now;
+
+    if (diff <= 0) return "Expired";
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const mins = Math.floor((diff / (1000 * 60)) % 60);
+    const secs = Math.floor((diff / 1000) % 60);
+
+    if (days > 0) return `${days}d ${hours}h ${mins}m`;
+    return `${hours}h ${mins}m ${secs}s`;
+  };
+
+  const getCategoryColor = (category: string) => {
+    const colors = {
+      personal: { bg: "rgba(99, 102, 241, 0.1)", border: "rgba(99, 102, 241, 0.3)", text: "#a5b4fc" },
+      work:     { bg: "rgba(139, 92, 246, 0.1)", border: "rgba(139, 92, 246, 0.3)", text: "#c4b5fd" },
+      health:   { bg: "rgba(236, 72, 153, 0.1)", border: "rgba(236, 72, 153, 0.3)", text: "#f9a8d4" },
+      study:    { bg: "rgba(59, 130, 246, 0.1)", border: "rgba(59, 130, 246, 0.3)", text: "#93c5fd" }
+    };
+    return colors[category as keyof typeof colors] || colors.personal;
   };
 
   const handleSignOut = async () => {
-    if (isDemo) {
-      router.push("/signin");
-      return;
-    }
     await signOut();
     router.push("/signin");
   };
 
+  // -------------------------
+  // CREATE GOAL HANDLER
+  // -------------------------
+  const handleAddGoal = async () => {
+    if (!goalTitle.trim() || !endDate) return;
+    if (!authToken) return router.push("/signin");
+
+    const draft = {
+      title: goalTitle.trim(),
+      category: goalCategory,
+      frequency,
+      endDate,
+      repeatDay: frequency === "weekly" ? repeatDay : null
+    };
+
+    await createGoal(draft, authToken);
+
+    setGoalTitle("");
+    setGoalCategory("personal");
+    setFrequency("daily");
+    setRepeatDay(0);
+    setEndDate("");
+  };
+
+  // -------------------------
+  // RENDER
+  // -------------------------
   if (isPending) {
     return (
-      <div style={containerStyle}>
-        <div style={boxStyle}>
-          <h1 style={{ fontSize: 32, color: "#333", textAlign: "center" }}>
-            Loading...
-          </h1>
-        </div>
+      <div style={{
+        display: "flex",
+        minHeight: "100vh",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#121212",
+        color: "#9ca3af",
+        fontSize: "14px"
+      }}>
+        Loading...
       </div>
     );
   }
 
-  return (
-    <div style={containerStyle}>
-      <div style={boxStyle}>
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          <div style={{ display: "flex", gap: 10 }}>
-            <Link href="/tasks" style={btn("#e0e0e0", "#333")}>
-              ← Back to Tasks
-            </Link>
-            <Link href="/pet" style={btn("#e0e0e0", "#333")}>
-              Pet
-            </Link>
-          </div>
+  if (!session) return null;
 
-          <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-            <span style={{ color: "#666", fontSize: "14px" }}>
-              {isDemo ? "Demo User" : session.user.name || session.user.email}
-            </span>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              style={btn("#ff4757", "#fff")}
-            >
-              {isDemo ? "Exit Demo" : "Sign Out"}
-            </button>
+  // Filter occurrences by status
+  const now = new Date();
+  const activeOccurrences = occurrences.filter((occ) =>
+    new Date(occ.deadline) >= now && !occ.completed
+  );
+
+  const completedOccurrencesByGoal = goals.map((goal) => {
+    const goalOccs = occurrences.filter((o) => o.goalId === goal.id);
+    const total = goalOccs.length;
+    const completed = goalOccs.filter((o) => o.completed).length;
+    const allExpired = goalOccs.every((o) => new Date(o.deadline) < now);
+
+    return { goal, total, completed, allExpired };
+  });
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "#121212",
+      color: "#eeeeee",
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      display: "flex"
+    }}>
+      {/* -------------------------------- */}
+      {/* SIDEBAR (identical to Tasks)     */}
+      {/* -------------------------------- */}
+      <aside style={{
+        width: "260px",
+        background: "#121212",
+        display: "flex",
+        flexDirection: "column",
+        position: "fixed",
+        height: "100vh",
+        left: 0,
+        top: 0
+      }}>
+        <div style={{ padding: "24px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <SynapseLogo />
+            <span style={{ fontSize: "22px", fontWeight: "700", color: "#eeeeee" }}>Synapse</span>
           </div>
         </div>
 
-        <h1 style={{ fontSize: 32, color: "#333", marginBottom: 10 }}>
-          {isDemo ? "Goals (Demo Mode)" : "Goals"}
-        </h1>
-
-        {error && (
-          <div
+        <nav style={{
+          flex: 1,
+          padding: "20px 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px"
+        }}>
+          <button
+            onClick={() => router.push("/tasks")}
             style={{
-              marginBottom: 16,
-              padding: 12,
-              borderRadius: 8,
-              background: "rgba(244, 67, 54, 0.1)",
-              color: "#c62828",
-              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background: "transparent",
+              color: "#9ca3af",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s"
             }}
           >
-            {error}
-          </div>
-        )}
+            <TasksIcon active={false} />
+            Tasks
+          </button>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {/* Set / Update */}
-          <div style={card}>
-            <h3 style={{ marginTop: 0, marginBottom: 8, color: "#333" }}>
-              Set / Update Goals
-            </h3>
-            <p style={{ marginTop: 0, color: "#666", fontSize: 14 }}>
-              Enter minutes, then click <b>Save</b>. Progress “resets” by
-              current day/week window automatically.
+          <button
+            onClick={() => router.push("/friends")}
+            onMouseEnter={() => setHoveredButton("friends")}
+            onMouseLeave={() => setHoveredButton(null)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background: hoveredButton === "friends" ? "#1a1a1a" : "transparent",
+              color: "#9ca3af",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+          >
+            <FriendsIcon active={false} />
+            Friends
+          </button>
+
+          <button
+            onClick={() => router.push("/pet")}
+            onMouseEnter={() => setHoveredButton("pet")}
+            onMouseLeave={() => setHoveredButton(null)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background: hoveredButton === "pet" ? "#1a1a1a" : "transparent",
+              color: "#9ca3af",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+          >
+            <PetIcon active={false} />
+            Pet
+          </button>
+
+          <button
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background: "#1a1a1a",
+              color: "#eeeeee",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer"
+            }}
+          >
+            <GoalsIcon active={true} />
+            Goals
+          </button>
+        </nav>
+
+        {/* USER SECTION */}
+        <div style={{ padding: "16px" }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "12px"
+          }}>
+            <div style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "8px",
+              background: "#4972e1",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "14px",
+              fontWeight: "600",
+              color: "#fff"
+            }}>
+              {(session.user.name?.[0] || session.user.email?.[0] || "U").toUpperCase()}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#eeeeee",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap"
+              }}>
+                {session.user.name || "User"}
+              </div>
+              <div style={{
+                fontSize: "12px",
+                color: "#888",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+              }}>
+                @{(session.user as any).username || "username"}
+              </div>
+            </div>
+
+            <div style={{
+              fontSize: "12px",
+              fontWeight: "600",
+              color: "#a5b4fc"
+            }}>
+              {userXp} XP
+            </div>
+          </div>
+
+          <button
+            onClick={handleSignOut}
+            onMouseEnter={() => setHoveredButton("signout")}
+            onMouseLeave={() => setHoveredButton(null)}
+            style={{
+              width: "100%",
+              padding: "6px 10px",
+              borderRadius: "6px",
+              border: "none",
+              background: hoveredButton === "signout" ? "#7f1d1d" : "#991b1b",
+              color: "#fca5a5",
+              fontSize: "12px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT */}
+      <main style={{
+        marginLeft: "260px",
+        flex: 1,
+        padding: "16px",
+        width: "100%"
+      }}>
+        <div style={{
+          background: "#161616",
+          borderRadius: "24px",
+          padding: "20px 28px",
+          minHeight: "calc(100vh - 32px)"
+        }}>
+
+          {/* CREATE NEW GOAL */}
+          <div style={{ marginBottom: "32px" }}>
+            <h2 style={{
+              fontSize: "24px",
+              fontWeight: "600",
+              color: "#eee",
+              marginBottom: "8px"
+            }}>
+              Create New Goal
+            </h2>
+
+            <p style={{ color: "#9ca3af", marginBottom: "20px", fontSize: "14px" }}>
+              What's your goal?
             </p>
 
-            <div
-              style={{
+            <div style={{ display: "grid", gap: "16px" }}>
+              {/* TITLE */}
+              <input
+                type="text"
+                placeholder="Goal name"
+                value={goalTitle}
+                onChange={(e) => setGoalTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddGoal()}
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid #2a2a2a",
+                  background: "#161616",
+                  color: "#eee",
+                  fontSize: "15px",
+                  outline: "none"
+                }}
+              />
+
+              {/* GRID OF SELECT INPUTS */}
+              <div style={{
                 display: "grid",
-                gridTemplateColumns: "auto auto auto auto",
-                gap: 8,
-                alignItems: "center",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "12px"
+              }}>
+
+                {/* FREQUENCY */}
+                <select
+                  value={frequency}
+                  onChange={(e) => setFrequency(e.target.value as any)}
+                  style={{
+                    padding: "14px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #2a2a2a",
+                    background: "#161616",
+                    color: "#eee",
+                    fontSize: "14px"
+                  }}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+
+                {/* REPEAT DAY (only visible for weekly) */}
+                {frequency === "weekly" && (
+                  <select
+                    value={repeatDay}
+                    onChange={(e) => setRepeatDay(Number(e.target.value))}
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "8px",
+                      border: "1px solid #2a2a2a",
+                      background: "#161616",
+                      color: "#eee",
+                      fontSize: "14px"
+                    }}
+                  >
+                    <option value={0}>Sunday</option>
+                    <option value={1}>Monday</option>
+                    <option value={2}>Tuesday</option>
+                    <option value={3}>Wednesday</option>
+                    <option value={4}>Thursday</option>
+                    <option value={5}>Friday</option>
+                    <option value={6}>Saturday</option>
+                  </select>
+                )}
+
+                {/* END DATE */}
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{
+                    padding: "14px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #2a2a2a",
+                    background: "#161616",
+                    color: "#eee",
+                    fontSize: "14px"
+                  }}
+                />
+
+                {/* CATEGORY */}
+                <select
+                  value={goalCategory}
+                  onChange={(e) => setGoalCategory(e.target.value)}
+                  style={{
+                    padding: "14px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #2a2a2a",
+                    background: "#161616",
+                    color: "#eee",
+                    fontSize: "14px"
+                  }}
+                >
+                  <option value="personal">Personal</option>
+                  <option value="work">Work</option>
+                  <option value="health">Health</option>
+                  <option value="study">Study</option>
+                </select>
+
+                {/* ADD BUTTON */}
+                <button
+                  onClick={handleAddGoal}
+                  onMouseEnter={() => setHoveredButton("create-goal")}
+                  onMouseLeave={() => setHoveredButton(null)}
+                  style={{
+                    padding: "14px 24px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: hoveredButton === "create-goal" ? "#91aaed" : "#4972e1",
+                    color: "#fff",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    boxShadow:
+                      hoveredButton === "create-goal"
+                        ? "0 8px 16px rgba(73,114,225,0.3)"
+                        : "0 4px 12px rgba(73,114,225,0.2)",
+                    transform:
+                      hoveredButton === "create-goal" ? "translateY(-1px)" : "translateY(0)"
+                  }}
+                >
+                  Add Goal
+                </button>
+              </div>
+            </div>
+          </div>
+          {/* -------------------------------- */}
+          {/* TABS (In Progress / Completed)   */}
+          {/* -------------------------------- */}
+          <div style={{
+            marginBottom: "24px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px"
+          }}>
+            <button
+              onClick={() => setActiveTab("inprogress")}
+              onMouseEnter={() => setHoveredButton("tab-inprogress")}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                border: "none",
+                background: activeTab === "inprogress"
+                  ? "#2a2a2a"
+                  : hoveredButton === "tab-inprogress"
+                    ? "#1a1a1a"
+                    : "transparent",
+                color: activeTab === "inprogress" ? "#eee" : "#9ca3af",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "500"
               }}
             >
-              <div style={{ fontSize: 12, color: "#666" }}>Category</div>
-              <div style={{ fontSize: 12, color: "#666" }}>Period</div>
-              <div style={{ fontSize: 12, color: "#666" }}>Minutes</div>
-              <div />
-              {categories.map((cat) =>
-                periods.map((per) => {
-                  const key = `${cat}:${per}`;
-                  const val = form[key] ?? existing[key] ?? "";
-                  return (
-                    <React.Fragment key={key}>
-                      <div style={{ textTransform: "capitalize" }}>{cat}</div>
-                      <div style={{ textTransform: "capitalize" }}>{per}</div>
-                      <input
-                        type="number"
-                        min={0}
-                        value={val}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            [key]: e.target.value === "" ? "" : Number(e.target.value),
-                          }))
-                        }
-                        placeholder="0"
-                        style={{
-                          padding: "8px",
-                          borderRadius: 8,
-                          border: "2px solid #ddd",
-                          width: 120,
-                        }}
-                      />
-                      <button
-                        onClick={() => handleSave(cat, per)}
-                        style={btn("#111827", "#fff")}
-                      >
-                        Save
-                      </button>
-                    </React.Fragment>
-                  );
-                })
-              )}
-            </div>
+              In Progress
+            </button>
+
+            <button
+              onClick={() => setActiveTab("completed")}
+              onMouseEnter={() => setHoveredButton("tab-completed")}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                border: "none",
+                background: activeTab === "completed"
+                  ? "#2a2a2a"
+                  : hoveredButton === "tab-completed"
+                    ? "#1a1a1a"
+                    : "transparent",
+                color: activeTab === "completed" ? "#eee" : "#9ca3af",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "500"
+              }}
+            >
+              Completed
+            </button>
           </div>
 
-          {/* Progress */}
-          <div style={card}>
-            <h3 style={{ marginTop: 0, marginBottom: 8, color: "#333" }}>
-              Progress
-            </h3>
+          {/* -------------------------------- */}
+          {/* IN-PROGRESS TABLE START          */}
+          {/* -------------------------------- */}
+          {activeTab === "inprogress" && (
+            <div style={{
+              borderRadius: "12px",
+              border: "1px solid #2a2a2a",
+              background: "#161616",
+              overflow: "hidden",
+              marginBottom: "32px"
+            }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead style={{ background: "#1a1a1a" }}>
+                    <tr>
+                      <th style={{ width: "48px", padding: "12px 16px" }}></th>
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        color: "#9ca3af"
+                      }}>Goal</th>
 
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-              <div />
-              <button
-                onClick={() => token && fetchSummary(token)}
-                style={btn("#e0e0e0", "#333")}
-                title="Refresh summary"
-              >
-                Refresh
-              </button>
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        color: "#9ca3af"
+                      }}>Category</th>
+
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        color: "#9ca3af"
+                      }}>Deadline</th>
+
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        color: "#9ca3af"
+                      }}>Countdown</th>
+
+                      <th style={{ width: "60px", padding: "12px 16px" }}></th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {isLoadingGoals ? (
+                      <tr>
+                        <td colSpan={6} style={{
+                          padding: "48px",
+                          textAlign: "center",
+                          color: "#9ca3af",
+                          fontSize: "14px"
+                        }}>
+                          Loading goals...
+                        </td>
+                      </tr>
+                    ) : activeOccurrences.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{
+                          padding: "48px",
+                          textAlign: "center",
+                          color: "#9ca3af"
+                        }}>
+                          No active goals.
+                        </td>
+                      </tr>
+                    ) : (
+                      activeOccurrences.map((occ) => {
+                        const goal = goals.find((g) => g.id === occ.goalId);
+                        if (!goal) return null;
+
+                        const categoryStyle = getCategoryColor(goal.category);
+                        const countdown = formatCountdown(occ.deadline);
+
+                        return (
+                          <tr
+                            key={occ.id}
+                            onMouseEnter={() => setHoveredRow(occ.id)}
+                            onMouseLeave={() => setHoveredRow(null)}
+                            style={{
+                              borderTop: "1px solid #2a2a2a",
+                              background:
+                                hoveredRow === occ.id ? "#1a1a1a" : "transparent",
+                              transition: "background 0.15s ease"
+                            }}
+                          >
+                            {/* COMPLETE CHECKBOX */}
+                            <td style={{ padding: "12px 16px" }}>
+                              <Tooltip text="Mark complete">
+                                <div
+                                  onClick={async () => {
+                                    if (occ.completed) return;
+                                    if (!authToken) return;
+
+                                    await completeOccurrence(goal.id, occ.id, authToken);
+
+                                    // Add XP client-side for instant visual update
+                                    setUserXp((xp) =>
+                                      xp + (goal.frequency === "daily" ? 10 : 100)
+                                    );
+                                  }}
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    borderRadius: "6px",
+                                    border: occ.completed
+                                      ? "none"
+                                      : "2px solid #4b5563",
+                                    background: occ.completed ? "#4972e1" : "transparent",
+                                    cursor: occ.completed ? "default" : "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    transition: "all 0.2s"
+                                  }}
+                                >
+                                  {occ.completed && (
+                                    <svg
+                                      width="12"
+                                      height="12"
+                                      viewBox="0 0 12 12"
+                                      stroke="white"
+                                      strokeWidth="2"
+                                      fill="none"
+                                    >
+                                      <path d="M2 6l3 3 5-6" />
+                                    </svg>
+                                  )}
+                                </div>
+                              </Tooltip>
+                            </td>
+
+                            {/* GOAL NAME */}
+                            <td style={{
+                              padding: "12px 16px",
+                              fontSize: "14px",
+                              color: "#eee",
+                              fontWeight: "500"
+                            }}>
+                              {goal.title}
+                            </td>
+
+                            {/* CATEGORY BADGE */}
+                            <td style={{ padding: "12px 16px" }}>
+                              <span style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                background: categoryStyle.bg,
+                                border: `1px solid ${categoryStyle.border}`,
+                                fontSize: "12px",
+                                color: categoryStyle.text,
+                                fontWeight: "500",
+                                textTransform: "capitalize"
+                              }}>
+                                {goal.category}
+                              </span>
+                            </td>
+
+                            {/* DEADLINE */}
+                            <td style={{
+                              padding: "12px 16px",
+                              color: "#9ca3af",
+                              fontSize: "14px"
+                            }}>
+                              {new Date(occ.deadline).toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit"
+                              })}
+                            </td>
+
+                            {/* COUNTDOWN */}
+                            <td style={{
+                              padding: "12px 16px",
+                              color: "#eee",
+                              fontFamily: '"SF Mono", monospace',
+                              fontSize: "14px"
+                            }}>
+                              {countdown}
+                            </td>
+
+                            {/* DELETE BUTTON */}
+                            <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                              <Tooltip text="Delete goal">
+                                <button
+                                  onClick={() => deleteGoal(goal.id, authToken!)}
+                                  onMouseEnter={() => setHoveredButton(`delete-${goal.id}`)}
+                                  onMouseLeave={() => setHoveredButton(null)}
+                                  style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    transform:
+                                      hoveredButton === `delete-${goal.id}`
+                                        ? "scale(1.15)"
+                                        : "scale(1)",
+                                    transition: "all 0.2s"
+                                  }}
+                                >
+                                  <svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="#f87171"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M3 6h18" />
+                                    <path d="M8 6V4h8v2" />
+                                    <path d="M19 6l-1 14H6L5 6" />
+                                    <path d="M10 11v6" />
+                                    <path d="M14 11v6" />
+                                  </svg>
+                                </button>
+                              </Tooltip>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
+          )}
 
-            {isLoading ? (
-              <p style={{ color: "#666" }}>Loading...</p>
-            ) : (
-              categories.flatMap((cat) =>
-                periods.map((per) => {
-                  const s = getSummary(cat, per);
-                  const pct =
-                    s.minutesTarget > 0
-                      ? (s.minutesLogged / s.minutesTarget) * 100
-                      : 0;
+          {/* -------------------------------- */}
+          {/* COMPLETED TAB                    */}
+          {/* -------------------------------- */}
+          {activeTab === "completed" && (
+            <div style={{
+              borderRadius: "12px",
+              border: "1px solid #2a2a2a",
+              background: "#161616",
+              overflow: "hidden",
+              marginBottom: "32px"
+            }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead style={{ background: "#1a1a1a" }}>
+                    <tr>
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        color: "#9ca3af"
+                      }}>
+                        Goal
+                      </th>
 
-                  return (
-                    <div
-                      key={`${cat}:${per}`}
-                      style={{
-                        marginBottom: 12,
-                        paddingBottom: 12,
-                        borderBottom: "1px dashed #eaeaea",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <div
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        color: "#9ca3af"
+                      }}>
+                        Category
+                      </th>
+
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        color: "#9ca3af"
+                      }}>
+                        End Date
+                      </th>
+
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        color: "#9ca3af"
+                      }}>
+                        Completions
+                      </th>
+
+                      <th style={{ width: "60px" }}></th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {completedOccurrencesByGoal.filter((g) => g.allExpired).length === 0 ? (
+                      <tr>
+                        <td colSpan={5}
                           style={{
-                            fontWeight: 700,
-                            textTransform: "capitalize",
-                            color: "#333",
-                          }}
-                        >
-                          {cat} – {per}
-                        </div>
-                        <span style={pill(s.met)}>
-                          {s.met ? "Goal met!" : "In progress"}
-                        </span>
-                      </div>
+                            padding: "48px",
+                            textAlign: "center",
+                            color: "#9ca3af"
+                          }}>
+                          No completed goals.
+                        </td>
+                      </tr>
+                    ) : (
+                      completedOccurrencesByGoal
+                        .filter((g) => g.allExpired)
+                        .map(({ goal, total, completed }) => {
+                          const categoryStyle = getCategoryColor(goal.category);
 
-                      <div style={{ marginTop: 6, fontSize: 14, color: "#475569" }}>
-                        Target: <b>{s.minutesTarget} min</b> · Logged:{" "}
-                        <b>{s.minutesLogged} min</b> · Remaining:{" "}
-                        <b>{s.minutesRemaining} min</b>
-                      </div>
+                          return (
+                            <tr key={goal.id}
+                              onMouseEnter={() => setHoveredRow(goal.id)}
+                              onMouseLeave={() => setHoveredRow(null)}
+                              style={{
+                                borderTop: "1px solid #2a2a2a",
+                                background:
+                                  hoveredRow === goal.id ? "#1a1a1a" : "transparent",
+                                transition: "all 0.2s"
+                              }}
+                            >
+                              {/* GOAL NAME */}
+                              <td style={{
+                                padding: "12px 16px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#eee"
+                              }}>
+                                {goal.title}
+                              </td>
 
-                      <div style={{ marginTop: 8 }}>
-                        <div style={track}>
-                          <div style={fill(pct)} />
-                        </div>
-                      </div>
+                              {/* CATEGORY */}
+                              <td style={{ padding: "12px 16px" }}>
+                                <span style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "4px 10px",
+                                  borderRadius: "6px",
+                                  background: categoryStyle.bg,
+                                  border: `1px solid ${categoryStyle.border}`,
+                                  color: categoryStyle.text,
+                                  fontSize: "12px",
+                                  fontWeight: "500",
+                                  textTransform: "capitalize"
+                                }}>
+                                  {goal.category}
+                                </span>
+                              </td>
 
-                      {s.met && (
-                        <div style={{ marginTop: 8, fontSize: 12, color: "#1b5e20" }}>
-                          🎉 Nice! You hit your {per} goal for <b>{cat}</b>.
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )
-            )}
-          </div>
+                              {/* END DATE */}
+                              <td style={{
+                                padding: "12px 16px",
+                                color: "#9ca3af",
+                                fontSize: "14px"
+                              }}>
+                                {new Date(goal.endDate!).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric"
+                                })}
+                              </td>
+
+                              {/* COMPLETIONS */}
+                              <td style={{
+                                padding: "12px 16px",
+                                color: "#eee",
+                                fontSize: "14px",
+                                fontWeight: "600"
+                              }}>
+                                {completed} / {total}
+                              </td>
+
+                              {/* DELETE */}
+                              <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                                <button
+                                  onClick={() => deleteGoal(goal.id, authToken!)}
+                                  onMouseEnter={() => setHoveredButton(`delete-${goal.id}`)}
+                                  onMouseLeave={() => setHoveredButton(null)}
+                                  style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    transform:
+                                      hoveredButton === `delete-${goal.id}`
+                                        ? "scale(1.15)"
+                                        : "scale(1)",
+                                    transition: "all 0.2s"
+                                  }}
+                                >
+                                  <svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="#f87171"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M3 6h18" />
+                                    <path d="M8 6V4h8v2" />
+                                    <path d="M19 6l-1 14H6L5 6" />
+                                    <path d="M10 11v6" />
+                                    <path d="M14 11v6" />
+                                  </svg>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
         </div>
-      </div>
+      </main>
     </div>
   );
 }

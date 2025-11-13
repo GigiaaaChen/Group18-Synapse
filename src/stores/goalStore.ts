@@ -1,67 +1,228 @@
-"use client";
-
 import { create } from "zustand";
-import type { Goal, GoalProgress, GoalCategory, GoalPeriod } from "@/types/goal";
+import type { Goal, GoalDraft, GoalOccurrence } from "@/types/goal";
 
-interface GoalState {
+interface GoalStore {
   goals: Goal[];
-  progress: GoalProgress[];
+  occurrences: GoalOccurrence[];
   isLoading: boolean;
   error: string | null;
 
   fetchGoals: (token: string) => Promise<void>;
-  upsertGoal: (g: { category: GoalCategory; period: GoalPeriod; minutesTarget: number }, token: string) => Promise<void>;
-  fetchSummary: (token: string) => Promise<void>;
-  setError: (msg: string | null) => void;
+  createGoal: (draft: GoalDraft, token: string) => Promise<void>;
+  completeOccurrence: (
+    goalId: string,
+    occurrenceId: string,
+    token: string
+  ) => Promise<void>;
+  deleteGoal: (goalId: string, token: string) => Promise<void>;
+
+  setError: (message: string | null) => void;
 }
 
-export const useGoalStore = create<GoalState>((set, get) => ({
+const API_BASE = "/api/goals";
+
+const withAuth = (token: string, extra: HeadersInit = {}) => ({
+  Authorization: `Bearer ${token}`,
+  ...extra,
+});
+
+const parseGoal = (g: any): Goal => ({
+  id: g.id,
+  userId: g.userId,
+  title: g.title,
+  category: g.category,
+  frequency: g.frequency,
+  repeatDay: g.repeatDay ?? null,
+  endDate: g.endDate,
+  createdAt: g.createdAt ?? null,
+});
+
+const parseOccurrence = (o: any): GoalOccurrence => ({
+  id: o.id,
+  goalId: o.goalId,
+  deadline: o.deadline,
+  completed: o.completed,
+  completedAt: o.completedAt ?? null,
+  createdAt: o.createdAt ?? null,
+});
+
+export const useGoalStore = create<GoalStore>((set, get) => ({
   goals: [],
-  progress: [],
+  occurrences: [],
   isLoading: false,
   error: null,
 
-  setError(msg) {
-    set({ error: msg });
-  },
+  setError: (message) => set({ error: message }),
 
-  async fetchGoals(token) {
+  // --------- GET /api/goals ----------
+  fetchGoals: async (token: string) => {
     set({ isLoading: true, error: null });
-    const res = await fetch("/api/goals", { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-      const { error } = (await res.json().catch(() => ({}))) as { error?: string };
-      set({ isLoading: false, error: error || "Failed to load goals" });
-      return;
+
+    try {
+      const response = await fetch(API_BASE, {
+        method: "GET",
+        headers: withAuth(token),
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        let body: { error?: string } = {};
+        try {
+          body = (await response.json()) as { error?: string };
+        } catch {
+          // response not JSON
+        }
+        throw new Error(body.error || "Failed to load goals");
+      }
+
+      const data = (await response.json()) as {
+        goals: Goal[];
+        occurrences: GoalOccurrence[];
+      };
+
+      set({
+        goals: (data.goals || []).map(parseGoal),
+        occurrences: (data.occurrences || []).map(parseOccurrence),
+        isLoading: false,
+        error: null,
+      });
+    } catch (err) {
+      set({
+        isLoading: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to load goals. Please try again.",
+      });
     }
-    const data = (await res.json()) as Goal[];
-    set({ goals: data, isLoading: false });
   },
 
-  async upsertGoal(payload, token) {
+  // --------- POST /api/goals ----------
+  createGoal: async (draft: GoalDraft, token: string) => {
     set({ error: null });
-    const res = await fetch("/api/goals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const { error } = (await res.json().catch(() => ({}))) as { error?: string };
-      set({ error: error || "Failed to save goal" });
-      return;
+
+    try {
+      const response = await fetch(API_BASE, {
+        method: "POST",
+        headers: withAuth(token, { "Content-Type": "application/json" }),
+        body: JSON.stringify(draft),
+      });
+
+      if (!response.ok) {
+        let body: { error?: string } = {};
+        try {
+          body = (await response.json()) as { error?: string };
+        } catch {
+          // probably an HTML error page / non-JSON
+        }
+        throw new Error(body.error || "Failed to create goal");
+      }
+
+      const data = (await response.json()) as {
+        goal: Goal;
+        occurrences: GoalOccurrence[];
+      };
+
+      const newGoal = parseGoal(data.goal);
+      const newOccs = (data.occurrences || []).map(parseOccurrence);
+
+      set((state) => ({
+        goals: [...(state.goals || []), newGoal],
+        occurrences: [...(state.occurrences || []), ...newOccs],
+      }));
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to create goal. Please try again.",
+      });
+      throw err;
     }
-    await get().fetchGoals(token);
-    await get().fetchSummary(token);
   },
 
-  async fetchSummary(token) {
+  // --------- POST /api/goals/:goalId/complete ----------
+  completeOccurrence: async (
+    goalId: string,
+    occurrenceId: string,
+    token: string
+  ) => {
     set({ error: null });
-    const res = await fetch("/api/goals/summary", { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-      const { error } = (await res.json().catch(() => ({}))) as { error?: string };
-      set({ error: error || "Failed to load goal progress" });
-      return;
+
+    try {
+      const response = await fetch(`${API_BASE}/${goalId}/complete`, {
+        method: "POST",
+        headers: withAuth(token, { "Content-Type": "application/json" }),
+        body: JSON.stringify({ occurrenceId }),
+      });
+
+      if (!response.ok) {
+        let body: { error?: string } = {};
+        try {
+          body = (await response.json()) as { error?: string };
+        } catch {
+          // ignore
+        }
+        throw new Error(body.error || "Failed to complete occurrence");
+      }
+
+      const data = (await response.json()) as {
+        occurrence: GoalOccurrence;
+        xpGain?: number;
+      };
+
+      const updatedOcc = parseOccurrence(data.occurrence);
+
+      set((state) => ({
+        occurrences: (state.occurrences || []).map((occ) =>
+          occ.id === updatedOcc.id ? updatedOcc : occ
+        ),
+      }));
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to complete goal occurrence. Please try again.",
+      });
+      throw err;
     }
-    const data = (await res.json()) as GoalProgress[];
-    set({ progress: data });
+  },
+
+  // --------- DELETE /api/goals/:goalId ----------
+  deleteGoal: async (goalId: string, token: string) => {
+    set({ error: null });
+
+    try {
+      const response = await fetch(`${API_BASE}/${goalId}`, {
+        method: "DELETE",
+        headers: withAuth(token),
+      });
+
+      if (!response.ok) {
+        let body: { error?: string } = {};
+        try {
+          body = (await response.json()) as { error?: string };
+        } catch {
+          // ignore
+        }
+        throw new Error(body.error || "Failed to delete goal");
+      }
+
+      set((state) => ({
+        goals: (state.goals || []).filter((g) => g.id !== goalId),
+        occurrences: (state.occurrences || []).filter(
+          (o) => o.goalId !== goalId
+        ),
+      }));
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to delete goal. Please try again.",
+      });
+      throw err;
+    }
   },
 }));

@@ -121,3 +121,31 @@ export function PetIcon({ active = false, width = 20, height = 20 }: IconProps) 
   );
 }
 
+export function GoalsIcon({ active = false, width = 20, height = 20 }: IconProps) {
+  const primary = active ? "#91aaed" : "#4a5568";
+  const accent = active ? "#4972e1" : "#2d3748";
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={width}
+      height={height}
+    >
+      {/* target rings */}
+      <circle cx="12" cy="12" r="9" fill="none" stroke={accent} strokeWidth="1.4" />
+      <circle cx="12" cy="12" r="5.5" fill="none" stroke={primary} strokeWidth="1.4" />
+      <circle cx="12" cy="12" r="2" fill={primary} />
+
+      {/* arrow */}
+      <path
+        d="M15.5 6.5 18 5l-1.5 2.5L19 9l-4.5 4.5"
+        fill="none"
+        stroke={accent}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { toast, Toaster } from "sonner";
-import { TasksIcon, FriendsIcon, PetIcon, SynapseLogo } from "@/components/icons";
+import { TasksIcon, FriendsIcon, PetIcon, GoalsIcon, SynapseLogo } from "@/components/icons";
 
 interface Friend {
   friendshipId: number;
@@ -442,6 +442,29 @@ export default function FriendsPage() {
               Pet
             </button>
 
+            <button
+              onClick={() => router.push('/goals')}
+              onMouseEnter={() => setHoveredButton('goals')}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                border: 'none',
+                background: hoveredButton === 'goals' ? '#1a1a1a' : 'transparent',
+                color: '#9ca3af',
+                fontSize: '15px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                textAlign: 'left'
+              }}
+            >
+              <GoalsIcon active={false} />
+              Goals
+            </button>
           </nav>
 
           {/* User Section */}
