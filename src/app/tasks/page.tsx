@@ -278,6 +278,20 @@ export default function TaskPage() {
       return;
     }
 
+    if (!isGoal && taskDate) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+      if (!dateRegex.test(taskDate)) {
+        setError("Invalid date format. Please use YYYY-MM-DD.");
+        return;
+      }
+
+      if (isNaN(Date.parse(taskDate))) {
+        setError("Invalid date. Please enter a real date.");
+        return;
+      }
+    }
+
     try {
       await addTask(
         {
