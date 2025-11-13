@@ -1,5 +1,4 @@
 import type { NextRequest } from "next/server";
-
 import { db } from "@/lib/db";
 
 export interface AuthenticatedUser {
@@ -20,27 +19,22 @@ const extractToken = (request: NextRequest): string | undefined => {
   const header =
     request.headers.get("authorization") ??
     request.headers.get("Authorization");
-
-  if (!header) {
-    return undefined;
-  }
+  if (!header) return undefined;
 
   const [scheme, value] = header.split(" ");
-  if (scheme?.toLowerCase() !== "bearer" || !value) {
-    return undefined;
-  }
+  if (scheme?.toLowerCase() !== "bearer" || !value) return undefined;
 
   return value.trim();
 };
 
+/**
+ * Strict helper: throws UnauthorizedError if the user cannot be resolved.
+ */
 export const requireUser = async (
   request: NextRequest,
 ): Promise<AuthenticatedUser> => {
   const token = extractToken(request);
-
-  if (!token) {
-    throw new UnauthorizedError();
-  }
+  if (!token) throw new UnauthorizedError();
 
   const result = await db.query<{
     id: string;
@@ -60,10 +54,7 @@ export const requireUser = async (
   );
 
   const record = result.rows[0];
-
-  if (!record) {
-    throw new UnauthorizedError();
-  }
+  if (!record) throw new UnauthorizedError();
 
   return {
     id: record.id,
@@ -71,6 +62,21 @@ export const requireUser = async (
     name: record.name,
     sessionToken: record.token,
   };
+};
+
+/**
+ * Lenient helper: returns null instead of throwing when not authorized.
+ * Useful for endpoints that should respond 200 with limited data for logged-out
+ * users or for pages that fall back to a demo flow.
+ */
+export const getUserFromSession = async (
+  request: NextRequest,
+): Promise<AuthenticatedUser | null> => {
+  try {
+    return await requireUser(request);
+  } catch {
+    return null;
+  }
 };
 
 export { UnauthorizedError };

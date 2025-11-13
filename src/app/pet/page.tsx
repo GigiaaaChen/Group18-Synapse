@@ -4,21 +4,31 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { Toaster } from "sonner";
-import { TasksIcon, FriendsIcon, PetIcon, SynapseLogo } from "@/components/icons";
+import { TasksIcon, FriendsIcon, PetIcon, GoalsIcon, SynapseLogo } from "@/components/icons";
 import PetPanel from "@/components/pet/PetPanel";
 
 export default function PetPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
-  
-  // start at 0
-  // fetch the real xp from the api
-  const [userXp, setUserXp] = useState<number>(0);
+
+  // ✅ XP pattern: same as TaskPage / FriendsPage
+  const [userXp, setUserXp] = useState<number>(() => {
+    const xp = (session?.user as any)?.xp;
+    return typeof xp === "number" ? xp : 0;
+  });
 
   useEffect(() => {
     if (!isPending && !session) router.push("/signin");
   }, [session, isPending, router]);
+
+  // ✅ keep XP in sync if session updates
+  useEffect(() => {
+    const xp = (session?.user as any)?.xp;
+    if (typeof xp === "number") {
+      setUserXp(xp);
+    }
+  }, [session?.user]);
 
   const userId: string =
     (session?.user as any)?.id ||
@@ -26,29 +36,12 @@ export default function PetPage() {
     session?.user?.name ||
     "guest";
 
-  useEffect(() => {
-    if (!session?.user || !userId || userId === "guest") return;
-
-    const fetchPetState = async () => {
-      try {
-        const res = await fetch(`/api/pet?userId=${encodeURIComponent(userId)}`);
-        if (!res.ok) {
-          console.error("Failed to fetch pet state", await res.text());
-          return;
-        }
-        const data = await res.json();
-        // use xp from DB
-        setUserXp(data.xp ?? 0);
-      } catch (err) {
-        console.error("Error fetching pet state:", err);
-      }
-    };
-
-    fetchPetState();
-  }, [session, userId]);
-
   const userInitial = useMemo(
-    () => (session?.user?.name?.[0] || session?.user?.email?.[0] || "U").toUpperCase(),
+    () =>
+      (session?.user?.name?.[0] ||
+        session?.user?.email?.[0] ||
+        "U"
+      ).toUpperCase(),
     [session?.user]
   );
 
@@ -184,6 +177,30 @@ export default function PetPage() {
               <PetIcon active />
               Pet
             </button>
+
+            <button
+              onClick={() => router.push("/goals")}
+              onMouseEnter={() => setHoveredButton("goals")}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: hoveredButton === "goals" ? "#1a1a1a" : "transparent",
+                color: "#9ca3af",
+                fontSize: 15,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all .2s ease",
+                textAlign: "left",
+              }}
+            >
+              <GoalsIcon active={false} />
+              Goals
+            </button>
           </nav>
 
           {/* User */}
@@ -295,7 +312,14 @@ export default function PetPage() {
             </h1>
 
             {/* Tamagotchi panel (evolution driven by user XP) */}
-            <PetPanel userId={userId} xp={userXp} />
+            <PetPanel
+              userId={userId}
+              xp={userXp}
+              // OPTIONAL: if PetPanel needs to change XP locally, you can add this:
+              // onXpChange={(delta) =>
+              //   setUserXp((prev) => Math.max(0, prev + delta))
+              // }
+            />
           </div>
         </main>
       </div>
