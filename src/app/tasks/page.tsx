@@ -857,6 +857,30 @@ export default function TaskPage() {
                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                 gap: '12px'
               }}>
+                <input
+                  type="date"
+                  className="white-calendar"
+                  value={taskDate}
+                  onChange={(e) => setTaskDate(e.target.value)}
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #2a2a2a',
+                    background: '#161616',
+                    color: '#eeeeee',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#6366f1';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#2a2a2a';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
               <input
                 type="date"
                 value={taskDate}

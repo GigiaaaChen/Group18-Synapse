@@ -59,3 +59,7 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
+
+.white-calendar::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
