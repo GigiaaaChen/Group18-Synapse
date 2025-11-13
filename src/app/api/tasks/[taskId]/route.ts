@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { requireUser, UnauthorizedError } from "@/lib/session";
-import type { Task } from "@/types/task";
+import type { Task, GoalFrequency } from "@/types/task";
 
 interface TaskRow {
   id: string;
@@ -13,6 +13,8 @@ interface TaskRow {
   completed: boolean;
   progress: number;
   completedAt: string | null;
+  isGoal: boolean;
+  goalFrequency: GoalFrequency;
 }
 
 const mapRowToTask = (row: TaskRow): Task => ({
@@ -23,6 +25,8 @@ const mapRowToTask = (row: TaskRow): Task => ({
   completed: row.completed,
   progress: row.progress,
   completedAt: row.completedAt,
+  isGoal: row.isGoal,
+  goalFrequency: row.goalFrequency,
 });
 
 export const PATCH = async (
@@ -39,15 +43,23 @@ export const PATCH = async (
     let isCompletingTask = false;
     let isUncompletingTask = false;
     let taskDueDate: string | null = null;
+    let taskIsGoal = false;
+    let taskGoalFrequency: GoalFrequency | null = null;
 
     // Fetch current task state if changing completion status
     if (body.completed !== undefined) {
       const currentTask = await db.query(
-        `SELECT "dueDate", "completed" FROM "task" WHERE "id" = $1 AND "userId" = $2`,
+        `SELECT "dueDate", "completed", "isGoal", "goalFrequency"
+         FROM "task"
+         WHERE "id" = $1 AND "userId" = $2`,
         [taskId, user.id],
       );
+
       if (currentTask.rows[0]) {
         taskDueDate = currentTask.rows[0].dueDate;
+        taskIsGoal = currentTask.rows[0].isGoal;
+        taskGoalFrequency = currentTask.rows[0].goalFrequency as GoalFrequency;
+
         if (body.completed === true && !currentTask.rows[0].completed) {
           isCompletingTask = true;
         } else if (body.completed === false && currentTask.rows[0].completed) {
@@ -93,6 +105,39 @@ export const PATCH = async (
       values.push(progress);
     }
 
+    if (body.isGoal !== undefined) {
+      updates.push(`"isGoal" = $${index++}`);
+      values.push(Boolean(body.isGoal));
+
+      if (body.isGoal) {
+        updates.push(`"dueDate" = NULL`);
+
+        const freq = body.goalFrequency;
+        if (freq !== "daily" && freq !== "weekly") {
+          throw new Error(
+            "Goal frequency must be 'daily' or 'weekly' when setting a goal",
+          );
+        }
+        updates.push(`"goalFrequency" = $${index++}`);
+        values.push(freq);
+      } else {
+        updates.push(`"goalFrequency" = NULL`);
+      }
+    } else if (body.goalFrequency !== undefined) {
+      if (body.goalFrequency === null) {
+        updates.push(`"goalFrequency" = NULL`);
+      } else if (
+        body.goalFrequency === "daily" ||
+        body.goalFrequency === "weekly"
+      ) {
+        updates.push(`"goalFrequency" = $${index++}`);
+        values.push(body.goalFrequency);
+      } else {
+        throw new Error("Invalid goal frequency");
+      }
+    }
+
+
     if (updates.length === 0) {
       return NextResponse.json(
         { error: "No valid fields provided" },
@@ -120,6 +165,8 @@ export const PATCH = async (
           "category",
           "completed",
           "progress",
+          "isGoal",
+          "goalFrequency",
           to_char("completedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS "completedAt"
       `,
       values,
@@ -137,7 +184,10 @@ export const PATCH = async (
       const dueDate = taskDueDate ? new Date(taskDueDate) : null;
       let xpChange = 0;
 
-      if (dueDate) {
+      if (taskIsGoal && taskGoalFrequency === "weekly") {
+        xpChange = 30;
+      }
+      else if (dueDate) {
         const completedDate = new Date(completedAt.toDateString());
         const dueDateOnly = new Date(dueDate.toDateString());
 
@@ -146,7 +196,8 @@ export const PATCH = async (
         } else {
           xpChange = 5;
         }
-      } else {
+      }
+      else {
         xpChange = 10;
       }
 
