@@ -1,3 +1,5 @@
+export type GoalFrequency = "daily" | "weekly" | null;
+
 export interface Task {
   id: string;
   title: string;
@@ -6,6 +8,8 @@ export interface Task {
   completed: boolean;
   progress: number;
   completedAt: string | null;
+  isGoal: boolean;
+  goalFrequency: GoalFrequency;
 }
 
 export interface TaskDraft {
@@ -14,4 +18,6 @@ export interface TaskDraft {
   category: string;
   completed: boolean;
   progress: number;
+  isGoal: boolean;
+  goalFrequency: GoalFrequency;
 }

@@ -39,7 +39,10 @@ const parseTask = (task: Task): Task => ({
   completed: task.completed,
   progress: task.progress,
   completedAt: task.completedAt ?? null,
+  isGoal: task.isGoal,
+  goalFrequency: task.goalFrequency,
 });
+
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
   tasks: [],
