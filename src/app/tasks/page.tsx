@@ -1,17 +1,77 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo} from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useTaskStore } from "@/stores/taskStore";
 import { Tooltip } from "@/components/Tooltip";
 import { TasksIcon, FriendsIcon, PetIcon, SynapseLogo } from "@/components/icons";
 import { SlidingNumber } from "@/components/SlidingNumber";
 
+const TASK_DISMISS_PREFIX = "taskNotificationDismissed_";
+
 export default function TaskPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
   const tasks = useTaskStore((state) => state.tasks);
+
+  const [dismissedToday, setDismissedToday] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const newSet = new Set<string>();
+
+    for (const task of tasks) {
+      const key = `${TASK_DISMISS_PREFIX}${task.id}`;
+      const stored = window.localStorage.getItem(key);
+      if (stored === today) {
+        newSet.add(task.id);
+      }
+    }
+
+    setDismissedToday(newSet);
+  }, [tasks]);
+
+  const handleDismissTaskForToday = (taskId: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${TASK_DISMISS_PREFIX}${taskId}`;
+    window.localStorage.setItem(key, today);
+
+    setDismissedToday((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
+  };
+
+  const isWithinNextThreeDays = (dueDateStr: string | null) => {
+    if (!dueDateStr) return false;
+    const today = new Date();
+    const due = new Date(dueDateStr); // "YYYY-MM-DD"
+
+    const todayOnly = new Date(today.toDateString());
+    const dueOnly = new Date(due.toDateString());
+
+    const diffMs = dueOnly.getTime() - todayOnly.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    return diffDays >= 0 && diffDays <= 3;
+  };
+
+  const upcomingDueTasks = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          !task.completed &&
+          isWithinNextThreeDays(task.dueDate) &&
+          !dismissedToday.has(task.id),
+      ),
+    [tasks, dismissedToday],
+  );
+
+  const showNotification = upcomingDueTasks.length > 0;
+
   const isLoadingTasks = useTaskStore((state) => state.isLoading);
   const taskError = useTaskStore((state) => state.error);
   const fetchTasks = useTaskStore((state) => state.fetchTasks);
@@ -26,7 +86,12 @@ export default function TaskPage() {
   const [activeTab, setActiveTab] = useState<"all" | "overdue" | "active" | "completed">("all");
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const [userXp, setUserXp] = useState((session?.user as any)?.xp ?? 0);
+
+  const [userXp, setUserXp] = useState<number>(() => {
+  const xp = (session?.user as any)?.xp;
+  return typeof xp === "number" ? xp : 0;
+  });
+
   const [activeTimer, setActiveTimer] = useState<{
     id: string;
     taskid: string;
@@ -55,10 +120,11 @@ export default function TaskPage() {
   }, [authToken, fetchTasks]);
 
   useEffect(() => {
-    if (session?.user) {
-      setUserXp((session.user as any)?.xp ?? 0);
+    const xp = (session?.user as any)?.xp;
+    if (typeof xp === "number") {
+      setUserXp(xp);
     }
-  }, [session]);
+  }, [session?.user]);
 
   // Fetch active timer and total times on mount
   useEffect(() => {
@@ -531,6 +597,87 @@ export default function TaskPage() {
         padding: '16px',
         width: '100%'
       }}>
+      {showNotification && (
+        <div
+          style={{
+            marginBottom: "16px",
+            padding: "12px 16px",
+            borderRadius: "12px",
+            background:
+              "linear-gradient(90deg, rgba(59,130,246,0.18), rgba(129,140,248,0.18))",
+            border: "1px solid rgba(129,140,248,0.6)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 600,
+              color: "#e5e7eb",
+            }}
+          >
+            Tasks due in the next 3 days
+          </div>
+
+          <ul
+            style={{
+              margin: 0,
+              padding: 0,
+              listStyle: "none",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
+            {upcomingDueTasks.map((task) => (
+              <li
+                key={task.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                  fontSize: "13px",
+                  color: "#e5e7eb",
+                }}
+              >
+                <div
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: "70%",
+                  }}
+                >
+                  <strong>{task.title}</strong>{" "}
+                  {task.dueDate && (
+                    <span style={{ opacity: 0.8 }}>— due {task.dueDate}</span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => handleDismissTaskForToday(task.id)}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: "11px",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(148,163,255,0.8)",
+                    backgroundColor: "rgba(15,23,42,0.9)",
+                    color: "#e5e7eb",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  Dismiss for Today
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
         <div style={{
           background: '#161616',
           borderRadius: '24px',
@@ -1186,12 +1333,38 @@ export default function TaskPage() {
                             justifyContent: 'flex-end'
                           }}>
                             <button
-                              onClick={() => {
-                                if (!authToken) return;
-                                setError(null);
-                                const newProgress = Math.max(0, task.progress - 10);
-                                updateTaskProgress(task.id, newProgress, authToken).catch(() => { });
-                              }}
+                            onClick={async () => {
+                              if (!authToken) return;
+                              setError(null);
+
+                              const wasCompleted = task.completed;
+                              const newProgress = Math.min(100, task.progress - 10);
+                              const nowCompleted = newProgress === 100;
+
+                              try {
+                                await updateTaskProgress(task.id, newProgress, authToken);
+                              } catch {
+                                return;
+                              }
+
+                              if (wasCompleted !== nowCompleted) {
+                                let xpChange = 10;
+                                if (task.dueDate) {
+                                  const due = new Date(task.dueDate);
+                                  const today = new Date();
+                                  due.setHours(0, 0, 0, 0);
+                                  today.setHours(0, 0, 0, 0);
+                                  if (today > due) xpChange = 5;
+                                }
+
+                                if (!wasCompleted && nowCompleted) {
+                                  setUserXp((prev: number) => prev + xpChange);
+                                } else if (wasCompleted && !nowCompleted) {
+                                  setUserXp((prev: number) => Math.max(0, prev - xpChange));
+                                }
+                              }
+                            }}
+
                               onMouseEnter={() => setHoveredButton(`dec-${task.id}`)}
                               onMouseLeave={() => setHoveredButton(null)}
                               style={{
@@ -1249,12 +1422,40 @@ export default function TaskPage() {
                               </span>
                             </div>
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 if (!authToken) return;
                                 setError(null);
-                                const newProgress = Math.min(100, task.progress + 10);
-                                updateTaskProgress(task.id, newProgress, authToken).catch(() => { });
+
+                                if (task.progress === 100) return;
+
+                                const wasCompleted = task.completed;
+                                const newProgress = Math.max(0, task.progress + 10);
+                                const nowCompleted = newProgress === 100;
+
+                                try {
+                                  await updateTaskProgress(task.id, newProgress, authToken);
+                                } catch {
+                                  return;
+                                }
+
+                                if (wasCompleted !== nowCompleted) {
+                                  let xpChange = 10;
+                                  if (task.dueDate) {
+                                    const due = new Date(task.dueDate);
+                                    const today = new Date();
+                                    due.setHours(0, 0, 0, 0);
+                                    today.setHours(0, 0, 0, 0);
+                                    if (today > due) xpChange = 5;
+                                  }
+
+                                  if (wasCompleted && !nowCompleted) {
+                                    setUserXp((prev: number) => Math.max(0, prev - xpChange));
+                                  } else if (!wasCompleted && nowCompleted) {
+                                    setUserXp((prev: number) => prev + xpChange);
+                                  }
+                                }
                               }}
+
                               onMouseEnter={() => setHoveredButton(`inc-${task.id}`)}
                               onMouseLeave={() => setHoveredButton(null)}
                               style={{
