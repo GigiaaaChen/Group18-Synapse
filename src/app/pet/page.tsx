@@ -11,21 +11,41 @@ export default function PetPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
-  const [userXp, setUserXp] = useState<number>((session?.user as any)?.xp ?? 0);
+  
+  // start at 0
+  // fetch the real xp from the api
+  const [userXp, setUserXp] = useState<number>(0);
 
   useEffect(() => {
     if (!isPending && !session) router.push("/signin");
   }, [session, isPending, router]);
-
-  useEffect(() => {
-    if (session?.user) setUserXp((session.user as any)?.xp ?? 0);
-  }, [session]);
 
   const userId: string =
     (session?.user as any)?.id ||
     session?.user?.email ||
     session?.user?.name ||
     "guest";
+
+  useEffect(() => {
+    if (!session?.user || !userId || userId === "guest") return;
+
+    const fetchPetState = async () => {
+      try {
+        const res = await fetch(`/api/pet?userId=${encodeURIComponent(userId)}`);
+        if (!res.ok) {
+          console.error("Failed to fetch pet state", await res.text());
+          return;
+        }
+        const data = await res.json();
+        // use xp from DB
+        setUserXp(data.xp ?? 0);
+      } catch (err) {
+        console.error("Error fetching pet state:", err);
+      }
+    };
+
+    fetchPetState();
+  }, [session, userId]);
 
   const userInitial = useMemo(
     () => (session?.user?.name?.[0] || session?.user?.email?.[0] || "U").toUpperCase(),
