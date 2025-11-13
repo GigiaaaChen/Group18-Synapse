@@ -648,6 +648,7 @@ export default function TaskPage() {
               }}>
                 <input
                   type="date"
+                  className="white-calendar"
                   value={taskDate}
                   onChange={(e) => setTaskDate(e.target.value)}
                   style={{
