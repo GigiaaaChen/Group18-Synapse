@@ -26,7 +26,14 @@ export default function TaskPage() {
   const [activeTab, setActiveTab] = useState<"all" | "overdue" | "active" | "completed">("all");
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const [userXp, setUserXp] = useState((session?.user as any)?.xp ?? 0);
+
+  const [userXp, setUserXp] = useState<number>(() => {
+  const xp = (session?.user as any)?.xp;
+  return typeof xp === "number" ? xp : 0;
+  });
+
+  // const [userXp, setUserXp] = useState((session?.user as any)?.xp ?? 0);
+
   const [activeTimer, setActiveTimer] = useState<{
     id: string;
     taskid: string;
@@ -55,10 +62,17 @@ export default function TaskPage() {
   }, [authToken, fetchTasks]);
 
   useEffect(() => {
-    if (session?.user) {
-      setUserXp((session.user as any)?.xp ?? 0);
+    const xp = (session?.user as any)?.xp;
+    if (typeof xp === "number") {
+      setUserXp(xp);
     }
-  }, [session]);
+  }, [session?.user]);
+
+  //   useEffect(() => {
+  //   if (session?.user) {
+  //     setUserXp((session.user as any)?.xp ?? 0);
+  //   }
+  // }, [session]);
 
   // Fetch active timer and total times on mount
   useEffect(() => {
@@ -1186,12 +1200,38 @@ export default function TaskPage() {
                             justifyContent: 'flex-end'
                           }}>
                             <button
-                              onClick={() => {
-                                if (!authToken) return;
-                                setError(null);
-                                const newProgress = Math.max(0, task.progress - 10);
-                                updateTaskProgress(task.id, newProgress, authToken).catch(() => { });
-                              }}
+                            onClick={async () => {
+                              if (!authToken) return;
+                              setError(null);
+
+                              const wasCompleted = task.completed;
+                              const newProgress = Math.min(100, task.progress - 10);
+                              const nowCompleted = newProgress === 100;
+
+                              try {
+                                await updateTaskProgress(task.id, newProgress, authToken);
+                              } catch {
+                                return;
+                              }
+
+                              if (wasCompleted !== nowCompleted) {
+                                let xpChange = 10;
+                                if (task.dueDate) {
+                                  const due = new Date(task.dueDate);
+                                  const today = new Date();
+                                  due.setHours(0, 0, 0, 0);
+                                  today.setHours(0, 0, 0, 0);
+                                  if (today > due) xpChange = 5;
+                                }
+
+                                if (!wasCompleted && nowCompleted) {
+                                  setUserXp((prev: number) => prev + xpChange);
+                                } else if (wasCompleted && !nowCompleted) {
+                                  setUserXp((prev: number) => Math.max(0, prev - xpChange));
+                                }
+                              }
+                            }}
+
                               onMouseEnter={() => setHoveredButton(`dec-${task.id}`)}
                               onMouseLeave={() => setHoveredButton(null)}
                               style={{
@@ -1249,12 +1289,40 @@ export default function TaskPage() {
                               </span>
                             </div>
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 if (!authToken) return;
                                 setError(null);
-                                const newProgress = Math.min(100, task.progress + 10);
-                                updateTaskProgress(task.id, newProgress, authToken).catch(() => { });
+
+                                if (task.progress === 100) return;
+
+                                const wasCompleted = task.completed;
+                                const newProgress = Math.max(0, task.progress + 10);
+                                const nowCompleted = newProgress === 100;
+
+                                try {
+                                  await updateTaskProgress(task.id, newProgress, authToken);
+                                } catch {
+                                  return;
+                                }
+
+                                if (wasCompleted !== nowCompleted) {
+                                  let xpChange = 10;
+                                  if (task.dueDate) {
+                                    const due = new Date(task.dueDate);
+                                    const today = new Date();
+                                    due.setHours(0, 0, 0, 0);
+                                    today.setHours(0, 0, 0, 0);
+                                    if (today > due) xpChange = 5;
+                                  }
+
+                                  if (wasCompleted && !nowCompleted) {
+                                    setUserXp((prev: number) => Math.max(0, prev - xpChange));
+                                  } else if (!wasCompleted && nowCompleted) {
+                                    setUserXp((prev: number) => prev + xpChange);
+                                  }
+                                }
                               }}
+
                               onMouseEnter={() => setHoveredButton(`inc-${task.id}`)}
                               onMouseLeave={() => setHoveredButton(null)}
                               style={{

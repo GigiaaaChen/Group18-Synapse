@@ -9,7 +9,7 @@ export const auth = betterAuth({
     autoSignIn: true,
   },
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 day
+    expiresIn: 60 * 60 * 24 * 7, // 7 days
     freshAge: 60 * 60 * 24, // 1 day
   },
   user: {
@@ -18,6 +18,11 @@ export const auth = betterAuth({
         type: "string",
         required: true,
         unique: true,
+      },
+      xp: {
+        type: "number",
+        required: false,
+        defaultValue: 0,
       },
     },
   },
