@@ -143,7 +143,7 @@ export const POST = async (request: NextRequest) => {
         RETURNING
           "id",
           "title",
-          "dueDate",
+          to_char("dueDate", 'YYYY-MM-DD') AS "dueDate",
           "category",
           "completed",
           "progress",
