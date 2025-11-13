@@ -59,6 +59,36 @@ export default function TaskPage() {
     return diffDays >= 0 && diffDays <= 3;
   };
 
+    const getXpChangeForCompletion = (task: {
+    dueDate: string | null;
+    isGoal: boolean;
+    goalFrequency: "daily" | "weekly" | null;
+  }) => {
+    if (task.isGoal && task.goalFrequency === "weekly") {
+      return 30;
+    }
+
+    if (task.dueDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(task.dueDate);
+      due.setHours(0, 0, 0, 0);
+
+      if (today > due) {
+        return 5;
+      }
+      return 10;
+    }
+    return 10;
+  };
+
+    const getExpectedXpForTask = (task: { dueDate: string | null }) => {
+    if (task.dueDate) {
+      return { onTime: 10, late: 5 };
+    }
+    return { onTime: 10, late: 0 };
+  };
+
   const upcomingDueTasks = useMemo(
     () =>
       tasks.filter(
@@ -656,7 +686,10 @@ export default function TaskPage() {
               gap: "6px",
             }}
           >
-            {upcomingDueTasks.map((task) => (
+          {upcomingDueTasks.map((task) => {
+            const xp = getExpectedXpForTask(task);
+
+            return (
               <li
                 key={task.id}
                 style={{
@@ -678,7 +711,10 @@ export default function TaskPage() {
                 >
                   <strong>{task.title}</strong>{" "}
                   {task.dueDate && (
-                    <span style={{ opacity: 0.8 }}>— due {task.dueDate}</span>
+                    <span style={{ opacity: 0.8 }}>
+                      — due {task.dueDate} ·{" "}
+                      <span style={{ fontWeight: 500 }}>+{xp.onTime} XP</span>
+                    </span>
                   )}
                 </div>
 
@@ -699,7 +735,9 @@ export default function TaskPage() {
                   Dismiss for Today
                 </button>
               </li>
-            ))}
+            );
+          })}
+
           </ul>
         </div>
       )}
@@ -892,7 +930,7 @@ export default function TaskPage() {
                     transform: hoveredButton === 'create-task' ? 'translateY(-1px)' : 'translateY(0)'
                   }}
                 >
-                  Add Task
+                  Add Task/Goal
                 </button>
               </div>
             </div>
@@ -1200,24 +1238,14 @@ export default function TaskPage() {
                                 const wasCompleted = task.completed;
                                 await toggleTask(task.id, authToken).catch(() => { });
 
-                                const dueDate = task.dueDate ? new Date(task.dueDate) : null;
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
+                              const xpChange = getXpChangeForCompletion(task);
 
-                                let xpChange = 10;
-                                if (dueDate) {
-                                  const due = new Date(dueDate);
-                                  due.setHours(0, 0, 0, 0);
-                                  if (today > due) {
-                                    xpChange = 5;
-                                  }
-                                }
+                              if (!wasCompleted) {
+                                setUserXp((prev: number) => prev + xpChange);
+                              } else {
+                                setUserXp((prev: number) => Math.max(0, prev - xpChange));
+                              }
 
-                                if (!wasCompleted) {
-                                  setUserXp((prev: number) => prev + xpChange);
-                                } else {
-                                  setUserXp((prev: number) => Math.max(0, prev - xpChange));
-                                }
                               }}
                               style={{
                                 width: '20px',
@@ -1468,14 +1496,7 @@ export default function TaskPage() {
                               }
 
                               if (wasCompleted !== nowCompleted) {
-                                let xpChange = 10;
-                                if (task.dueDate) {
-                                  const due = new Date(task.dueDate);
-                                  const today = new Date();
-                                  due.setHours(0, 0, 0, 0);
-                                  today.setHours(0, 0, 0, 0);
-                                  if (today > due) xpChange = 5;
-                                }
+                                const xpChange = getXpChangeForCompletion(task);
 
                                 if (!wasCompleted && nowCompleted) {
                                   setUserXp((prev: number) => prev + xpChange);
@@ -1557,21 +1578,13 @@ export default function TaskPage() {
                                 } catch {
                                   return;
                                 }
-
                                 if (wasCompleted !== nowCompleted) {
-                                  let xpChange = 10;
-                                  if (task.dueDate) {
-                                    const due = new Date(task.dueDate);
-                                    const today = new Date();
-                                    due.setHours(0, 0, 0, 0);
-                                    today.setHours(0, 0, 0, 0);
-                                    if (today > due) xpChange = 5;
-                                  }
+                                  const xpChange = getXpChangeForCompletion(task);
 
-                                  if (wasCompleted && !nowCompleted) {
-                                    setUserXp((prev: number) => Math.max(0, prev - xpChange));
-                                  } else if (!wasCompleted && nowCompleted) {
+                                  if (!wasCompleted && nowCompleted) {
                                     setUserXp((prev: number) => prev + xpChange);
+                                  } else if (wasCompleted && !nowCompleted) {
+                                    setUserXp((prev: number) => Math.max(0, prev - xpChange));
                                   }
                                 }
                               }}

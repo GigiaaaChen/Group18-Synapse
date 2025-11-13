@@ -43,15 +43,23 @@ export const PATCH = async (
     let isCompletingTask = false;
     let isUncompletingTask = false;
     let taskDueDate: string | null = null;
+    let taskIsGoal = false;
+    let taskGoalFrequency: GoalFrequency | null = null;
 
     // Fetch current task state if changing completion status
     if (body.completed !== undefined) {
       const currentTask = await db.query(
-        `SELECT "dueDate", "completed" FROM "task" WHERE "id" = $1 AND "userId" = $2`,
+        `SELECT "dueDate", "completed", "isGoal", "goalFrequency"
+         FROM "task"
+         WHERE "id" = $1 AND "userId" = $2`,
         [taskId, user.id],
       );
+
       if (currentTask.rows[0]) {
         taskDueDate = currentTask.rows[0].dueDate;
+        taskIsGoal = currentTask.rows[0].isGoal;
+        taskGoalFrequency = currentTask.rows[0].goalFrequency as GoalFrequency;
+
         if (body.completed === true && !currentTask.rows[0].completed) {
           isCompletingTask = true;
         } else if (body.completed === false && currentTask.rows[0].completed) {
@@ -176,7 +184,10 @@ export const PATCH = async (
       const dueDate = taskDueDate ? new Date(taskDueDate) : null;
       let xpChange = 0;
 
-      if (dueDate) {
+      if (taskIsGoal && taskGoalFrequency === "weekly") {
+        xpChange = 30;
+      }
+      else if (dueDate) {
         const completedDate = new Date(completedAt.toDateString());
         const dueDateOnly = new Date(dueDate.toDateString());
 
@@ -185,7 +196,8 @@ export const PATCH = async (
         } else {
           xpChange = 5;
         }
-      } else {
+      }
+      else {
         xpChange = 10;
       }
 
