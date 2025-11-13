@@ -1,11 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useMemo} from "react";
+import { useEffect, useState, useMemo } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useTaskStore } from "@/stores/taskStore";
 import { Tooltip } from "@/components/Tooltip";
-import { TasksIcon, FriendsIcon, PetIcon, SynapseLogo } from "@/components/icons";
+import {
+  TasksIcon,
+  FriendsIcon,
+  PetIcon,
+  SynapseLogo,
+  HistoryIcon,
+} from "@/components/icons";
 import { SlidingNumber } from "@/components/SlidingNumber";
 
 const TASK_DISMISS_PREFIX = "taskNotificationDismissed_";
@@ -59,7 +65,7 @@ export default function TaskPage() {
     return diffDays >= 0 && diffDays <= 3;
   };
 
-    const getXpChangeForCompletion = (task: {
+  const getXpChangeForCompletion = (task: {
     dueDate: string | null;
     isGoal: boolean;
     goalFrequency: "daily" | "weekly" | null;
@@ -82,7 +88,7 @@ export default function TaskPage() {
     return 10;
   };
 
-    const getExpectedXpForTask = (task: { dueDate: string | null }) => {
+  const getExpectedXpForTask = (task: { dueDate: string | null }) => {
     if (task.dueDate) {
       return { onTime: 10, late: 5 };
     }
@@ -95,9 +101,9 @@ export default function TaskPage() {
         (task) =>
           !task.completed &&
           isWithinNextThreeDays(task.dueDate) &&
-          !dismissedToday.has(task.id),
+          !dismissedToday.has(task.id)
       ),
-    [tasks, dismissedToday],
+    [tasks, dismissedToday]
   );
 
   const showNotification = upcomingDueTasks.length > 0;
@@ -114,14 +120,18 @@ export default function TaskPage() {
   const [taskDate, setTaskDate] = useState("");
   const [taskCategory, setTaskCategory] = useState("personal");
   const [isGoal, setIsGoal] = useState(false);
-  const [goalFrequency, setGoalFrequency] = useState<"daily" | "weekly" | "">("");
-  const [activeTab, setActiveTab] = useState<"all" | "overdue" | "active" | "completed">("all");
+  const [goalFrequency, setGoalFrequency] = useState<"daily" | "weekly" | "">(
+    ""
+  );
+  const [activeTab, setActiveTab] = useState<
+    "all" | "overdue" | "active" | "completed"
+  >("all");
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
   const [userXp, setUserXp] = useState<number>(() => {
-  const xp = (session?.user as any)?.xp;
-  return typeof xp === "number" ? xp : 0;
+    const xp = (session?.user as any)?.xp;
+    return typeof xp === "number" ? xp : 0;
   });
 
   const [activeTimer, setActiveTimer] = useState<{
@@ -135,7 +145,9 @@ export default function TaskPage() {
   const [taskTimes, setTaskTimes] = useState<{ [key: string]: number }>({});
   const [editingDueDate, setEditingDueDate] = useState<string | null>(null);
   const [tempDueDate, setTempDueDate] = useState<string>("");
-  const [sortField, setSortField] = useState<"progress" | "dueDate" | "status" | "category" | null>("status");
+  const [sortField, setSortField] = useState<
+    "progress" | "dueDate" | "status" | "category" | null
+  >("status");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
@@ -148,7 +160,7 @@ export default function TaskPage() {
 
   useEffect(() => {
     if (!authToken) return;
-    fetchTasks(authToken).catch(() => { });
+    fetchTasks(authToken).catch(() => {});
   }, [authToken, fetchTasks]);
 
   useEffect(() => {
@@ -251,7 +263,10 @@ export default function TaskPage() {
         // Update pet happiness in UI
         if (session?.user) {
           const currentHappiness = (session.user as any)?.petHappiness ?? 100;
-          const newHappiness = Math.min(currentHappiness + data.carePoints, 100);
+          const newHappiness = Math.min(
+            currentHappiness + data.carePoints,
+            100
+          );
           // Update session would require refetch, so we'll just refetch active timer
         }
         setActiveTimer(null);
@@ -297,7 +312,7 @@ export default function TaskPage() {
   };
 
   /********** delete task */
-  const handleDeleteTask = async (task: typeof tasks[0]) => {
+  const handleDeleteTask = async (task: (typeof tasks)[0]) => {
     if (!authToken) return;
 
     try {
@@ -383,7 +398,7 @@ export default function TaskPage() {
           isGoal,
           goalFrequency: isGoal ? (goalFrequency as "daily" | "weekly") : null,
         },
-        authToken,
+        authToken
       );
 
       setTaskTitle("");
@@ -391,11 +406,10 @@ export default function TaskPage() {
       setTaskCategory("personal");
       setIsGoal(false);
       setGoalFrequency("");
-    } catch {
-    }
+    } catch {}
   };
 
-  const isOverdue = (task: typeof tasks[0]) => {
+  const isOverdue = (task: (typeof tasks)[0]) => {
     if (!task.dueDate || task.completed) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -408,7 +422,9 @@ export default function TaskPage() {
   const activeTasks = tasks.filter((t) => !t.completed && !isOverdue(t));
   const completedTasks = tasks.filter((t) => t.completed);
 
-  const handleSort = (field: "progress" | "dueDate" | "status" | "category") => {
+  const handleSort = (
+    field: "progress" | "dueDate" | "status" | "category"
+  ) => {
     if (sortField === field) {
       if (sortDirection === "asc") {
         setSortDirection("desc");
@@ -422,7 +438,7 @@ export default function TaskPage() {
     }
   };
 
-  const getStatusValue = (task: typeof tasks[0]) => {
+  const getStatusValue = (task: (typeof tasks)[0]) => {
     if (task.completed) return 3; // Done last
     if (isOverdue(task)) return 1; // Overdue first
     return 2; // In progress middle
@@ -473,10 +489,26 @@ export default function TaskPage() {
 
   const getCategoryColor = (category: string) => {
     const colors = {
-      personal: { bg: 'rgba(99, 102, 241, 0.1)', border: 'rgba(99, 102, 241, 0.3)', text: '#a5b4fc' },
-      work: { bg: 'rgba(139, 92, 246, 0.1)', border: 'rgba(139, 92, 246, 0.3)', text: '#c4b5fd' },
-      health: { bg: 'rgba(236, 72, 153, 0.1)', border: 'rgba(236, 72, 153, 0.3)', text: '#f9a8d4' },
-      study: { bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.3)', text: '#93c5fd' }
+      personal: {
+        bg: "rgba(99, 102, 241, 0.1)",
+        border: "rgba(99, 102, 241, 0.3)",
+        text: "#a5b4fc",
+      },
+      work: {
+        bg: "rgba(139, 92, 246, 0.1)",
+        border: "rgba(139, 92, 246, 0.3)",
+        text: "#c4b5fd",
+      },
+      health: {
+        bg: "rgba(236, 72, 153, 0.1)",
+        border: "rgba(236, 72, 153, 0.3)",
+        text: "#f9a8d4",
+      },
+      study: {
+        bg: "rgba(59, 130, 246, 0.1)",
+        border: "rgba(59, 130, 246, 0.3)",
+        text: "#93c5fd",
+      },
     };
     return colors[category as keyof typeof colors] || colors.personal;
   };
@@ -486,7 +518,11 @@ export default function TaskPage() {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return dateString;
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
     } catch {
       return dateString;
     }
@@ -494,15 +530,17 @@ export default function TaskPage() {
 
   if (isPending) {
     return (
-      <div style={{
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#121212',
-        color: '#9ca3af',
-        fontSize: '14px'
-      }}>
+      <div
+        style={{
+          display: "flex",
+          minHeight: "100vh",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#121212",
+          color: "#9ca3af",
+          fontSize: "14px",
+        }}
+      >
         Loading...
       </div>
     );
@@ -513,182 +551,232 @@ export default function TaskPage() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#121212',
-      color: '#eeeeee',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      display: 'flex'
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#121212",
+        color: "#eeeeee",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        display: "flex",
+      }}
+    >
       {/* Sidebar */}
-      <aside style={{
-        width: '260px',
-        background: '#121212',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'fixed',
-        height: '100vh',
-        left: 0,
-        top: 0
-      }}>
+      <aside
+        style={{
+          width: "260px",
+          background: "#121212",
+          display: "flex",
+          flexDirection: "column",
+          position: "fixed",
+          height: "100vh",
+          left: 0,
+          top: 0,
+        }}
+      >
         {/* Logo */}
-        <div style={{
-          padding: '24px 20px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div
+          style={{
+            padding: "24px 20px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <SynapseLogo />
-            <span style={{ fontSize: '22px', fontWeight: '700', color: '#eeeeee' }}>
+            <span
+              style={{ fontSize: "22px", fontWeight: "700", color: "#eeeeee" }}
+            >
               Synapse
             </span>
           </div>
         </div>
 
         {/* Navigation Links */}
-        <nav style={{
-          flex: 1,
-          padding: '20px 12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px'
-        }}>
+        <nav
+          style={{
+            flex: 1,
+            padding: "20px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+          }}
+        >
           <button
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: '#1a1a1a',
-              color: '#eeeeee',
-              fontSize: '15px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              textAlign: 'left'
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background: "#1a1a1a",
+              color: "#eeeeee",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              textAlign: "left",
             }}
           >
             <TasksIcon active={true} />
             Tasks
           </button>
           <button
-            onClick={() => router.push('/friends')}
-            onMouseEnter={() => setHoveredButton('friends')}
+            onClick={() => router.push("/friends")}
+            onMouseEnter={() => setHoveredButton("friends")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: hoveredButton === 'friends' ? '#1a1a1a' : 'transparent',
-              color: '#9ca3af',
-              fontSize: '15px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              textAlign: 'left'
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background:
+                hoveredButton === "friends" ? "#1a1a1a" : "transparent",
+              color: "#9ca3af",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              textAlign: "left",
             }}
           >
             <FriendsIcon active={false} />
             Friends
           </button>
           <button
-            onClick={() => router.push('/pet')}
-            onMouseEnter={() => setHoveredButton('pet')}
+            onClick={() => router.push("/pet")}
+            onMouseEnter={() => setHoveredButton("pet")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: hoveredButton === 'pet' ? '#1a1a1a' : 'transparent',
-              color: '#9ca3af',
-              fontSize: '15px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              textAlign: 'left'
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background: hoveredButton === "pet" ? "#1a1a1a" : "transparent",
+              color: "#9ca3af",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              textAlign: "left",
             }}
           >
             <PetIcon active={false} />
             Pet
           </button>
-
+          <button
+            onClick={() => router.push("/history")}
+            onMouseEnter={() => setHoveredButton("history")}
+            onMouseLeave={() => setHoveredButton(null)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "none",
+              background:
+                hoveredButton === "history" ? "#1a1a1a" : "transparent",
+              color: "#9ca3af",
+              fontSize: "15px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              textAlign: "left",
+            }}
+          >
+            <HistoryIcon active={false} />
+            History
+          </button>
         </nav>
 
         {/* User Section */}
-        <div style={{
-          padding: '16px'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            marginBottom: '12px'
-          }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: '#4972e1',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-              fontWeight: '600',
-              color: '#ffffff'
-            }}>
-              {(session.user.name?.[0] || session.user.email?.[0] || 'U').toUpperCase()}
+        <div
+          style={{
+            padding: "16px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              marginBottom: "12px",
+            }}
+          >
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                background: "#4972e1",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "14px",
+                fontWeight: "600",
+                color: "#ffffff",
+              }}
+            >
+              {(
+                session.user.name?.[0] ||
+                session.user.email?.[0] ||
+                "U"
+              ).toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: '14px',
-                fontWeight: '500',
-                color: '#eeeeee',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
-                {session.user.name || 'User'}
+              <div
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  color: "#eeeeee",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {session.user.name || "User"}
               </div>
-              <div style={{
-                fontSize: '12px',
-                color: '#888888',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
-                @{(session.user as any).username || 'username'}
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#888888",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                @{(session.user as any).username || "username"}
               </div>
             </div>
-            <div style={{
-              fontSize: '12px',
-              fontWeight: '600',
-              color: '#a5b4fc',
-              whiteSpace: 'nowrap'
-            }}>
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: "600",
+                color: "#a5b4fc",
+                whiteSpace: "nowrap",
+              }}
+            >
               {userXp} XP
             </div>
           </div>
           <button
             onClick={handleSignOut}
-            onMouseEnter={() => setHoveredButton('signout')}
+            onMouseEnter={() => setHoveredButton("signout")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
-              width: '100%',
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: 'none',
-              background: hoveredButton === 'signout' ? '#7f1d1d' : '#991b1b',
-              color: '#fca5a5',
-              fontSize: '12px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              width: "100%",
+              padding: "6px 10px",
+              borderRadius: "6px",
+              border: "none",
+              background: hoveredButton === "signout" ? "#7f1d1d" : "#991b1b",
+              color: "#fca5a5",
+              fontSize: "12px",
+              fontWeight: "500",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
             }}
           >
             Sign Out
@@ -697,133 +785,142 @@ export default function TaskPage() {
       </aside>
 
       {/* Main Content */}
-      <main style={{
-        marginLeft: '260px',
-        flex: 1,
-        padding: '16px',
-        width: '100%'
-      }}>
-      {showNotification && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "12px 16px",
-            borderRadius: "12px",
-            background:
-              "linear-gradient(90deg, rgba(59,130,246,0.18), rgba(129,140,248,0.18))",
-            border: "1px solid rgba(129,140,248,0.6)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-          }}
-        >
+      <main
+        style={{
+          marginLeft: "260px",
+          flex: 1,
+          padding: "16px",
+          width: "100%",
+        }}
+      >
+        {showNotification && (
           <div
             style={{
-              fontWeight: 600,
-              color: "#e5e7eb",
-            }}
-          >
-            Tasks due in the next 3 days
-          </div>
-
-          <ul
-            style={{
-              margin: 0,
-              padding: 0,
-              listStyle: "none",
+              marginBottom: "16px",
+              padding: "12px 16px",
+              borderRadius: "12px",
+              background:
+                "linear-gradient(90deg, rgba(59,130,246,0.18), rgba(129,140,248,0.18))",
+              border: "1px solid rgba(129,140,248,0.6)",
               display: "flex",
               flexDirection: "column",
-              gap: "6px",
+              gap: "8px",
             }}
           >
-          {upcomingDueTasks.map((task) => {
-            const xp = getExpectedXpForTask(task);
+            <div
+              style={{
+                fontWeight: 600,
+                color: "#e5e7eb",
+              }}
+            >
+              Tasks due in the next 3 days
+            </div>
 
-            return (
-              <li
-                key={task.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "8px",
-                  fontSize: "13px",
-                  color: "#e5e7eb",
-                }}
-              >
-                <div
-                  style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    maxWidth: "70%",
-                  }}
-                >
-                  <strong>{task.title}</strong>{" "}
-                  {task.dueDate && (
-                    <span style={{ opacity: 0.8 }}>
-                      — due {task.dueDate} ·{" "}
-                      <span style={{ fontWeight: 500 }}>+{xp.onTime} XP</span>
-                    </span>
-                  )}
-                </div>
+            <ul
+              style={{
+                margin: 0,
+                padding: 0,
+                listStyle: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              {upcomingDueTasks.map((task) => {
+                const xp = getExpectedXpForTask(task);
 
-                <button
-                  onClick={() => handleDismissTaskForToday(task.id)}
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: "11px",
-                    borderRadius: "999px",
-                    border: "1px solid rgba(148,163,255,0.8)",
-                    backgroundColor: "rgba(15,23,42,0.9)",
-                    color: "#e5e7eb",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  Dismiss for Today
-                </button>
-              </li>
-            );
-          })}
+                return (
+                  <li
+                    key={task.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "8px",
+                      fontSize: "13px",
+                      color: "#e5e7eb",
+                    }}
+                  >
+                    <div
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        maxWidth: "70%",
+                      }}
+                    >
+                      <strong>{task.title}</strong>{" "}
+                      {task.dueDate && (
+                        <span style={{ opacity: 0.8 }}>
+                          — due {task.dueDate} ·{" "}
+                          <span style={{ fontWeight: 500 }}>
+                            +{xp.onTime} XP
+                          </span>
+                        </span>
+                      )}
+                    </div>
 
-          </ul>
-        </div>
-      )}
+                    <button
+                      onClick={() => handleDismissTaskForToday(task.id)}
+                      style={{
+                        padding: "4px 10px",
+                        fontSize: "11px",
+                        borderRadius: "999px",
+                        border: "1px solid rgba(148,163,255,0.8)",
+                        backgroundColor: "rgba(15,23,42,0.9)",
+                        color: "#e5e7eb",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      Dismiss for Today
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
-        <div style={{
-          background: '#161616',
-          borderRadius: '24px',
-          padding: '20px 28px',
-          minHeight: 'calc(100vh - 32px)'
-        }}>
+        <div
+          style={{
+            background: "#161616",
+            borderRadius: "24px",
+            padding: "20px 28px",
+            minHeight: "calc(100vh - 32px)",
+          }}
+        >
           {/* Error */}
           {taskError && (
-            <div style={{
-              marginBottom: '24px',
-              padding: '16px',
-              borderRadius: '8px',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              background: 'rgba(239, 68, 68, 0.1)',
-              color: '#fca5a5',
-              fontSize: '14px'
-            }}>
+            <div
+              style={{
+                marginBottom: "24px",
+                padding: "16px",
+                borderRadius: "8px",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                background: "rgba(239, 68, 68, 0.1)",
+                color: "#fca5a5",
+                fontSize: "14px",
+              }}
+            >
               {taskError}
             </div>
           )}
 
           {/* Add Task Section */}
-          <div style={{ marginBottom: '32px' }}>
-            <h2 style={{
-              fontSize: '24px',
-              fontWeight: '600',
-              color: '#eeeeee',
-              marginBottom: '20px'
-            }}>
+          <div style={{ marginBottom: "32px" }}>
+            <h2
+              style={{
+                fontSize: "24px",
+                fontWeight: "600",
+                color: "#eeeeee",
+                marginBottom: "20px",
+              }}
+            >
               Create New Task
             </h2>
-            <div style={{ display: 'grid', gap: '16px' }}>
+            <div style={{ display: "grid", gap: "16px" }}>
               <input
                 type="text"
                 placeholder="What do you need to do?"
@@ -833,67 +930,78 @@ export default function TaskPage() {
                   if (e.key === "Enter") handleAddTask();
                 }}
                 style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #2a2a2a',
-                  background: '#161616',
-                  color: '#eeeeee',
-                  fontSize: '15px',
-                  outline: 'none',
-                  transition: 'all 0.2s ease'
+                  width: "100%",
+                  padding: "14px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid #2a2a2a",
+                  background: "#161616",
+                  color: "#eeeeee",
+                  fontSize: "15px",
+                  outline: "none",
+                  transition: "all 0.2s ease",
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#6366f1';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+                  e.target.style.borderColor = "#6366f1";
+                  e.target.style.boxShadow =
+                    "0 0 0 3px rgba(99, 102, 241, 0.1)";
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#2a2a2a';
-                  e.target.style.boxShadow = 'none';
+                  e.target.style.borderColor = "#2a2a2a";
+                  e.target.style.boxShadow = "none";
                 }}
               />
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '12px'
-              }}>
-              <input
-                type="date"
-                className="white-calendar"
-                value={taskDate}
-                onChange={(e) => setTaskDate(e.target.value)}
-                disabled={isGoal} // NEW: block due date when it's a goal
+              <div
                 style={{
-                  padding: '14px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #2a2a2a',
-                  background: isGoal ? '#111827' : '#161616',
-                  color: '#eeeeee',
-                  fontSize: '14px',
-                  outline: 'none',
-                  transition: 'all 0.2s ease',
-                  opacity: isGoal ? 0.5 : 1,
-                  cursor: isGoal ? 'not-allowed' : 'pointer',
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: "12px",
                 }}
-                onFocus={(e) => {
-                  if (isGoal) return;
-                  e.target.style.borderColor = '#6366f1';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '#2a2a2a';
-                  e.target.style.boxShadow = 'none';
-                }}
-              />
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              >
+                <input
+                  type="date"
+                  className="white-calendar"
+                  value={taskDate}
+                  onChange={(e) => setTaskDate(e.target.value)}
+                  disabled={isGoal} // NEW: block due date when it's a goal
+                  style={{
+                    padding: "14px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #2a2a2a",
+                    background: isGoal ? "#111827" : "#161616",
+                    color: "#eeeeee",
+                    fontSize: "14px",
+                    outline: "none",
+                    transition: "all 0.2s ease",
+                    opacity: isGoal ? 0.5 : 1,
+                    cursor: isGoal ? "not-allowed" : "pointer",
+                  }}
+                  onFocus={(e) => {
+                    if (isGoal) return;
+                    e.target.style.borderColor = "#6366f1";
+                    e.target.style.boxShadow =
+                      "0 0 0 3px rgba(99, 102, 241, 0.1)";
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = "#2a2a2a";
+                    e.target.style.boxShadow = "none";
+                  }}
+                />
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                  }}
+                >
                   <label
                     style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontSize: '14px',
-                      color: '#e5e7eb',
-                      cursor: 'pointer',
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "14px",
+                      color: "#e5e7eb",
+                      cursor: "pointer",
                     }}
                   >
                     <input
@@ -915,17 +1023,19 @@ export default function TaskPage() {
                     <select
                       value={goalFrequency}
                       onChange={(e) =>
-                        setGoalFrequency(e.target.value as "daily" | "weekly" | "")
+                        setGoalFrequency(
+                          e.target.value as "daily" | "weekly" | ""
+                        )
                       }
                       style={{
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid #2a2a2a',
-                        background: '#161616',
-                        color: '#eeeeee',
-                        fontSize: '14px',
-                        outline: 'none',
-                        cursor: 'pointer',
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #2a2a2a",
+                        background: "#161616",
+                        color: "#eeeeee",
+                        fontSize: "14px",
+                        outline: "none",
+                        cursor: "pointer",
                       }}
                     >
                       <option value="">Frequency</option>
@@ -939,23 +1049,24 @@ export default function TaskPage() {
                   value={taskCategory}
                   onChange={(e) => setTaskCategory(e.target.value)}
                   style={{
-                    padding: '14px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #2a2a2a',
-                    background: '#161616',
-                    color: '#eeeeee',
-                    fontSize: '14px',
-                    outline: 'none',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
+                    padding: "14px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #2a2a2a",
+                    background: "#161616",
+                    color: "#eeeeee",
+                    fontSize: "14px",
+                    outline: "none",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = '#6366f1';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+                    e.target.style.borderColor = "#6366f1";
+                    e.target.style.boxShadow =
+                      "0 0 0 3px rgba(99, 102, 241, 0.1)";
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = '#2a2a2a';
-                    e.target.style.boxShadow = 'none';
+                    e.target.style.borderColor = "#2a2a2a";
+                    e.target.style.boxShadow = "none";
                   }}
                 >
                   <option value="personal">Personal</option>
@@ -965,20 +1076,27 @@ export default function TaskPage() {
                 </select>
                 <button
                   onClick={handleAddTask}
-                  onMouseEnter={() => setHoveredButton('create-task')}
+                  onMouseEnter={() => setHoveredButton("create-task")}
                   onMouseLeave={() => setHoveredButton(null)}
                   style={{
-                    padding: '14px 24px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: hoveredButton === 'create-task' ? '#91aaed' : '#4972e1',
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    boxShadow: hoveredButton === 'create-task' ? '0 8px 16px rgba(73, 114, 225, 0.3)' : '0 4px 12px rgba(73, 114, 225, 0.2)',
-                    transform: hoveredButton === 'create-task' ? 'translateY(-1px)' : 'translateY(0)'
+                    padding: "14px 24px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background:
+                      hoveredButton === "create-task" ? "#91aaed" : "#4972e1",
+                    color: "#ffffff",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    boxShadow:
+                      hoveredButton === "create-task"
+                        ? "0 8px 16px rgba(73, 114, 225, 0.3)"
+                        : "0 4px 12px rgba(73, 114, 225, 0.2)",
+                    transform:
+                      hoveredButton === "create-task"
+                        ? "translateY(-1px)"
+                        : "translateY(0)",
                   }}
                 >
                   Add Task/Goal
@@ -988,143 +1106,173 @@ export default function TaskPage() {
           </div>
 
           {/* Tabs and Actions */}
-          <div style={{
-            marginBottom: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '16px'
-          }}>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              marginBottom: "24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "16px",
+            }}
+          >
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <button
                 onClick={() => setActiveTab("all")}
-                onMouseEnter={() => setHoveredButton('tab-all')}
+                onMouseEnter={() => setHoveredButton("tab-all")}
                 onMouseLeave={() => setHoveredButton(null)}
                 style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  background: activeTab === "all" ? '#2a2a2a' : (hoveredButton === 'tab-all' ? '#1a1a1a' : 'transparent'),
-                  color: activeTab === "all" ? '#eeeeee' : '#9ca3af',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background:
+                    activeTab === "all"
+                      ? "#2a2a2a"
+                      : hoveredButton === "tab-all"
+                        ? "#1a1a1a"
+                        : "transparent",
+                  color: activeTab === "all" ? "#eeeeee" : "#9ca3af",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
                 }}
               >
                 All
                 {tasks.length > 0 && (
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: '9999px',
-                    background: 'rgba(156, 163, 175, 0.2)',
-                    color: '#9ca3af',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "9999px",
+                      background: "rgba(156, 163, 175, 0.2)",
+                      color: "#9ca3af",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                    }}
+                  >
                     {tasks.length}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => setActiveTab("overdue")}
-                onMouseEnter={() => setHoveredButton('tab-overdue')}
+                onMouseEnter={() => setHoveredButton("tab-overdue")}
                 onMouseLeave={() => setHoveredButton(null)}
                 style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  background: activeTab === "overdue" ? '#2a2a2a' : (hoveredButton === 'tab-overdue' ? '#1a1a1a' : 'transparent'),
-                  color: activeTab === "overdue" ? '#eeeeee' : '#9ca3af',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background:
+                    activeTab === "overdue"
+                      ? "#2a2a2a"
+                      : hoveredButton === "tab-overdue"
+                        ? "#1a1a1a"
+                        : "transparent",
+                  color: activeTab === "overdue" ? "#eeeeee" : "#9ca3af",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
                 }}
               >
                 Overdue
                 {overdueTasks.length > 0 && (
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: '9999px',
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    color: '#fca5a5',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "9999px",
+                      background: "rgba(239, 68, 68, 0.2)",
+                      color: "#fca5a5",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                    }}
+                  >
                     {overdueTasks.length}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => setActiveTab("active")}
-                onMouseEnter={() => setHoveredButton('tab-active')}
+                onMouseEnter={() => setHoveredButton("tab-active")}
                 onMouseLeave={() => setHoveredButton(null)}
                 style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  background: activeTab === "active" ? '#2a2a2a' : (hoveredButton === 'tab-active' ? '#1a1a1a' : 'transparent'),
-                  color: activeTab === "active" ? '#eeeeee' : '#9ca3af',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background:
+                    activeTab === "active"
+                      ? "#2a2a2a"
+                      : hoveredButton === "tab-active"
+                        ? "#1a1a1a"
+                        : "transparent",
+                  color: activeTab === "active" ? "#eeeeee" : "#9ca3af",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
                 }}
               >
                 Active
                 {activeTasks.length > 0 && (
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: '9999px',
-                    background: 'rgba(99, 102, 241, 0.2)',
-                    color: '#a5b4fc',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "9999px",
+                      background: "rgba(99, 102, 241, 0.2)",
+                      color: "#a5b4fc",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                    }}
+                  >
                     {activeTasks.length}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => setActiveTab("completed")}
-                onMouseEnter={() => setHoveredButton('tab-completed')}
+                onMouseEnter={() => setHoveredButton("tab-completed")}
                 onMouseLeave={() => setHoveredButton(null)}
                 style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  background: activeTab === "completed" ? '#2a2a2a' : (hoveredButton === 'tab-completed' ? '#1a1a1a' : 'transparent'),
-                  color: activeTab === "completed" ? '#eeeeee' : '#9ca3af',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background:
+                    activeTab === "completed"
+                      ? "#2a2a2a"
+                      : hoveredButton === "tab-completed"
+                        ? "#1a1a1a"
+                        : "transparent",
+                  color: activeTab === "completed" ? "#eeeeee" : "#9ca3af",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
                 }}
               >
                 Completed
                 {completedTasks.length > 0 && (
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: '9999px',
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    color: '#6ee7b7',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}>
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: "9999px",
+                      background: "rgba(16, 185, 129, 0.2)",
+                      color: "#6ee7b7",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                    }}
+                  >
                     {completedTasks.length}
                   </span>
                 )}
@@ -1133,40 +1281,52 @@ export default function TaskPage() {
           </div>
 
           {/* Table */}
-          <div style={{
-            borderRadius: '12px',
-            border: '1px solid #2a2a2a',
-            background: '#161616',
-            overflow: 'hidden'
-          }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ background: '#1a1a1a' }}>
+          <div
+            style={{
+              borderRadius: "12px",
+              border: "1px solid #2a2a2a",
+              background: "#161616",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead style={{ background: "#1a1a1a" }}>
                   <tr>
-                    <th style={{ width: '48px', padding: '12px 16px' }}></th>
-                    <th style={{
-                      padding: '12px 16px',
-                      textAlign: 'left',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      color: '#9ca3af'
-                    }}>Task</th>
+                    <th style={{ width: "48px", padding: "12px 16px" }}></th>
+                    <th
+                      style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        color: "#9ca3af",
+                      }}
+                    >
+                      Task
+                    </th>
                     <th
                       onClick={() => handleSort("category")}
                       style={{
-                        padding: '12px 16px',
-                        textAlign: 'left',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        color: sortField === "category" ? '#eeeeee' : '#9ca3af',
-                        cursor: 'pointer',
-                        userSelect: 'none'
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        color: sortField === "category" ? "#eeeeee" : "#9ca3af",
+                        cursor: "pointer",
+                        userSelect: "none",
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
                         Category
                         {sortField === "category" && (
-                          <span style={{ fontSize: '10px' }}>
+                          <span style={{ fontSize: "10px" }}>
                             {sortDirection === "asc" ? "▲" : "▼"}
                           </span>
                         )}
@@ -1175,19 +1335,25 @@ export default function TaskPage() {
                     <th
                       onClick={() => handleSort("status")}
                       style={{
-                        padding: '12px 16px',
-                        textAlign: 'left',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        color: sortField === "status" ? '#eeeeee' : '#9ca3af',
-                        cursor: 'pointer',
-                        userSelect: 'none'
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        color: sortField === "status" ? "#eeeeee" : "#9ca3af",
+                        cursor: "pointer",
+                        userSelect: "none",
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
                         Status
                         {sortField === "status" && (
-                          <span style={{ fontSize: '10px' }}>
+                          <span style={{ fontSize: "10px" }}>
                             {sortDirection === "asc" ? "▲" : "▼"}
                           </span>
                         )}
@@ -1196,19 +1362,25 @@ export default function TaskPage() {
                     <th
                       onClick={() => handleSort("dueDate")}
                       style={{
-                        padding: '12px 16px',
-                        textAlign: 'left',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        color: sortField === "dueDate" ? '#eeeeee' : '#9ca3af',
-                        cursor: 'pointer',
-                        userSelect: 'none'
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        color: sortField === "dueDate" ? "#eeeeee" : "#9ca3af",
+                        cursor: "pointer",
+                        userSelect: "none",
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
                         Due Date
                         {sortField === "dueDate" && (
-                          <span style={{ fontSize: '10px' }}>
+                          <span style={{ fontSize: "10px" }}>
                             {sortDirection === "asc" ? "▲" : "▼"}
                           </span>
                         )}
@@ -1217,54 +1389,71 @@ export default function TaskPage() {
                     <th
                       onClick={() => handleSort("progress")}
                       style={{
-                        padding: '12px 16px',
-                        textAlign: 'right',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        color: sortField === "progress" ? '#eeeeee' : '#9ca3af',
-                        cursor: 'pointer',
-                        userSelect: 'none'
+                        padding: "12px 16px",
+                        textAlign: "right",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        color: sortField === "progress" ? "#eeeeee" : "#9ca3af",
+                        cursor: "pointer",
+                        userSelect: "none",
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          justifyContent: "flex-end",
+                        }}
+                      >
                         Progress
                         {sortField === "progress" && (
-                          <span style={{ fontSize: '10px' }}>
+                          <span style={{ fontSize: "10px" }}>
                             {sortDirection === "asc" ? "▲" : "▼"}
                           </span>
                         )}
                       </div>
                     </th>
-                    <th style={{
-                      padding: '12px 16px',
-                      textAlign: 'right',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      color: '#9ca3af'
-                    }}>Timer</th>
-                    <th style={{ width: '50px', padding: '12px 16px' }}></th>
+                    <th
+                      style={{
+                        padding: "12px 16px",
+                        textAlign: "right",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        color: "#9ca3af",
+                      }}
+                    >
+                      Timer
+                    </th>
+                    <th style={{ width: "50px", padding: "12px 16px" }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoadingTasks ? (
                     <tr>
-                      <td colSpan={8} style={{
-                        padding: '48px',
-                        textAlign: 'center',
-                        color: '#9ca3af',
-                        fontSize: '14px'
-                      }}>
+                      <td
+                        colSpan={8}
+                        style={{
+                          padding: "48px",
+                          textAlign: "center",
+                          color: "#9ca3af",
+                          fontSize: "14px",
+                        }}
+                      >
                         Loading tasks...
                       </td>
                     </tr>
                   ) : filteredTasks().length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{
-                        padding: '48px',
-                        textAlign: 'center',
-                        color: '#9ca3af',
-                        fontSize: '14px'
-                      }}>
+                      <td
+                        colSpan={8}
+                        style={{
+                          padding: "48px",
+                          textAlign: "center",
+                          color: "#9ca3af",
+                          fontSize: "14px",
+                        }}
+                      >
                         No tasks found.
                       </td>
                     </tr>
@@ -1275,58 +1464,79 @@ export default function TaskPage() {
                         onMouseEnter={() => setHoveredRow(task.id)}
                         onMouseLeave={() => setHoveredRow(null)}
                         style={{
-                          borderTop: '1px solid #2a2a2a',
-                          background: hoveredRow === task.id ? '#1a1a1a' : 'transparent',
-                          transition: 'background 0.15s ease'
+                          borderTop: "1px solid #2a2a2a",
+                          background:
+                            hoveredRow === task.id ? "#1a1a1a" : "transparent",
+                          transition: "background 0.15s ease",
                         }}
                       >
-                        <td style={{ padding: '12px 16px' }}>
+                        <td style={{ padding: "12px 16px" }}>
                           <Tooltip text="Mark as Complete">
                             <div
                               onClick={async () => {
                                 if (!authToken) return;
                                 setError(null);
                                 const wasCompleted = task.completed;
-                                await toggleTask(task.id, authToken).catch(() => { });
+                                await toggleTask(task.id, authToken).catch(
+                                  () => {}
+                                );
 
-                              const xpChange = getXpChangeForCompletion(task);
+                                const xpChange = getXpChangeForCompletion(task);
 
-                              if (!wasCompleted) {
-                                setUserXp((prev: number) => prev + xpChange);
-                              } else {
-                                setUserXp((prev: number) => Math.max(0, prev - xpChange));
-                              }
-
+                                if (!wasCompleted) {
+                                  setUserXp((prev: number) => prev + xpChange);
+                                } else {
+                                  setUserXp((prev: number) =>
+                                    Math.max(0, prev - xpChange)
+                                  );
+                                }
                               }}
                               style={{
-                                width: '20px',
-                                height: '20px',
-                                borderRadius: '6px',
-                                border: task.completed ? 'none' : '2px solid #4b5563',
-                                background: task.completed ? '#4972e1' : 'transparent',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'all 0.2s ease',
-                                position: 'relative'
+                                width: "20px",
+                                height: "20px",
+                                borderRadius: "6px",
+                                border: task.completed
+                                  ? "none"
+                                  : "2px solid #4b5563",
+                                background: task.completed
+                                  ? "#4972e1"
+                                  : "transparent",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                transition: "all 0.2s ease",
+                                position: "relative",
                               }}
                               onMouseEnter={(e) => {
                                 if (!task.completed) {
-                                  e.currentTarget.style.borderColor = '#6366f1';
-                                  e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)';
+                                  e.currentTarget.style.borderColor = "#6366f1";
+                                  e.currentTarget.style.background =
+                                    "rgba(99, 102, 241, 0.1)";
                                 }
                               }}
                               onMouseLeave={(e) => {
                                 if (!task.completed) {
-                                  e.currentTarget.style.borderColor = '#4b5563';
-                                  e.currentTarget.style.background = 'transparent';
+                                  e.currentTarget.style.borderColor = "#4b5563";
+                                  e.currentTarget.style.background =
+                                    "transparent";
                                 }
                               }}
                             >
                               {task.completed && (
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2">
-                                  <path d="M2 6l3 3 5-6" strokeLinecap="round" strokeLinejoin="round" />
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 12 12"
+                                  fill="none"
+                                  stroke="white"
+                                  strokeWidth="2"
+                                >
+                                  <path
+                                    d="M2 6l3 3 5-6"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
                                 </svg>
                               )}
                             </div>
@@ -1334,122 +1544,136 @@ export default function TaskPage() {
                         </td>
                         <td
                           style={{
-                            padding: '12px 16px',
-                            fontWeight: '500',
-                            color: '#eeeeee',
-                            fontSize: '14px',
+                            padding: "12px 16px",
+                            fontWeight: "500",
+                            color: "#eeeeee",
+                            fontSize: "14px",
                           }}
                         >
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "4px",
+                            }}
+                          >
                             <span>{task.title}</span>
                             {task.isGoal && (
                               <span
                                 style={{
-                                  alignSelf: 'flex-start',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  padding: '2px 8px',
-                                  borderRadius: '999px',
-                                  fontSize: '11px',
+                                  alignSelf: "flex-start",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "2px 8px",
+                                  borderRadius: "999px",
+                                  fontSize: "11px",
                                   fontWeight: 500,
-                                  background: 'rgba(52, 211, 153, 0.1)',
-                                  border: '1px solid rgba(52, 211, 153, 0.6)',
-                                  color: '#6ee7b7',
-                                  textTransform: 'capitalize',
+                                  background: "rgba(52, 211, 153, 0.1)",
+                                  border: "1px solid rgba(52, 211, 153, 0.6)",
+                                  color: "#6ee7b7",
+                                  textTransform: "capitalize",
                                 }}
                               >
                                 Goal ·{" "}
                                 {task.goalFrequency === "daily"
                                   ? "daily"
                                   : task.goalFrequency === "weekly"
-                                  ? "weekly"
-                                  : "unspecified"}
+                                    ? "weekly"
+                                    : "unspecified"}
                               </span>
                             )}
                           </div>
                         </td>
 
-                        <td style={{ padding: '12px 16px' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '4px 10px',
-                            borderRadius: '6px',
-                            background: getCategoryColor(task.category).bg,
-                            border: `1px solid ${getCategoryColor(task.category).border}`,
-                            fontSize: '12px',
-                            color: getCategoryColor(task.category).text,
-                            textTransform: 'capitalize',
-                            fontWeight: '500'
-                          }}>
+                        <td style={{ padding: "12px 16px" }}>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "4px 10px",
+                              borderRadius: "6px",
+                              background: getCategoryColor(task.category).bg,
+                              border: `1px solid ${getCategoryColor(task.category).border}`,
+                              fontSize: "12px",
+                              color: getCategoryColor(task.category).text,
+                              textTransform: "capitalize",
+                              fontWeight: "500",
+                            }}
+                          >
                             {task.category}
                           </span>
                         </td>
-                        <td style={{ padding: '12px 16px' }}>
+                        <td style={{ padding: "12px 16px" }}>
                           {task.completed ? (
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              background: 'rgba(16, 185, 129, 0.1)',
-                              border: '1px solid rgba(16, 185, 129, 0.2)',
-                              color: '#6ee7b7',
-                              fontSize: '12px',
-                              fontWeight: '500'
-                            }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                background: "rgba(16, 185, 129, 0.1)",
+                                border: "1px solid rgba(16, 185, 129, 0.2)",
+                                color: "#6ee7b7",
+                                fontSize: "12px",
+                                fontWeight: "500",
+                              }}
+                            >
                               <svg
                                 width="8"
                                 height="8"
                                 viewBox="0 0 8 8"
                                 fill="currentColor"
-                                style={{ marginRight: '6px' }}
+                                style={{ marginRight: "6px" }}
                               >
                                 <circle cx="4" cy="4" r="4" />
                               </svg>
                               Done
                             </span>
                           ) : isOverdue(task) ? (
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              background: 'rgba(216, 64, 64, 0.2)',
-                              border: '0.5px solid rgba(216, 64, 64, 0.6)',
-                              color: '#fff',
-                              fontSize: '12px',
-                              fontWeight: '500'
-                            }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                background: "rgba(216, 64, 64, 0.2)",
+                                border: "0.5px solid rgba(216, 64, 64, 0.6)",
+                                color: "#fff",
+                                fontSize: "12px",
+                                fontWeight: "500",
+                              }}
+                            >
                               <svg
                                 width="8"
                                 height="8"
                                 viewBox="0 0 8 8"
                                 fill="currentColor"
-                                style={{ marginRight: '6px' }}
+                                style={{ marginRight: "6px" }}
                               >
                                 <circle cx="4" cy="4" r="4" />
                               </svg>
                               Overdue
                             </span>
                           ) : (
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              background: 'rgba(251, 191, 36, 0.1)',
-                              border: '1px solid rgba(251, 191, 36, 0.3)',
-                              color: '#fcd34d',
-                              fontSize: '12px',
-                              fontWeight: '500'
-                            }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                background: "rgba(251, 191, 36, 0.1)",
+                                border: "1px solid rgba(251, 191, 36, 0.3)",
+                                color: "#fcd34d",
+                                fontSize: "12px",
+                                fontWeight: "500",
+                              }}
+                            >
                               <svg
                                 width="8"
                                 height="8"
                                 viewBox="0 0 8 8"
                                 fill="currentColor"
-                                style={{ marginRight: '6px' }}
+                                style={{ marginRight: "6px" }}
                               >
                                 <circle cx="4" cy="4" r="4" />
                               </svg>
@@ -1459,28 +1683,37 @@ export default function TaskPage() {
                         </td>
                         <td
                           style={{
-                            padding: '12px 16px',
-                            color: '#9ca3af',
-                            fontSize: '14px',
+                            padding: "12px 16px",
+                            color: "#9ca3af",
+                            fontSize: "14px",
                           }}
                         >
                           {task.isGoal ? (
-                            <span style={{ fontSize: '13px', color: '#e5e7eb' }}>
+                            <span
+                              style={{ fontSize: "13px", color: "#e5e7eb" }}
+                            >
                               {task.goalFrequency === "daily"
                                 ? "Daily goal"
                                 : task.goalFrequency === "weekly"
-                                ? "Weekly goal"
-                                : "Goal"}
+                                  ? "Weekly goal"
+                                  : "Goal"}
                             </span>
                           ) : editingDueDate === task.id ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
                               <input
                                 type="date"
                                 value={tempDueDate}
                                 onChange={(e) => setTempDueDate(e.target.value)}
                                 onBlur={() => handleDueDateSave(task.id)}
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter") handleDueDateSave(task.id);
+                                  if (e.key === "Enter")
+                                    handleDueDateSave(task.id);
                                   if (e.key === "Escape") handleDueDateCancel();
                                 }}
                                 autoFocus
@@ -1496,12 +1729,22 @@ export default function TaskPage() {
                               />
                             </div>
                           ) : (
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
                               <span>{formatDate(task.dueDate)}</span>
                               <Tooltip text="Edit due date">
                                 <button
-                                  onClick={() => handleDueDateEdit(task.id, task.dueDate)}
-                                  onMouseEnter={() => setHoveredButton(`edit-date-${task.id}`)}
+                                  onClick={() =>
+                                    handleDueDateEdit(task.id, task.dueDate)
+                                  }
+                                  onMouseEnter={() =>
+                                    setHoveredButton(`edit-date-${task.id}`)
+                                  }
                                   onMouseLeave={() => setHoveredButton(null)}
                                   style={{
                                     background: "none",
@@ -1524,92 +1767,119 @@ export default function TaskPage() {
                           )}
                         </td>
 
-                        <td style={{ padding: '12px 16px' }}>
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            justifyContent: 'flex-end'
-                          }}>
-                            <button
-                            onClick={async () => {
-                              if (!authToken) return;
-                              setError(null);
-
-                              const wasCompleted = task.completed;
-                              const newProgress = Math.min(100, task.progress - 10);
-                              const nowCompleted = newProgress === 100;
-
-                              try {
-                                await updateTaskProgress(task.id, newProgress, authToken);
-                              } catch {
-                                return;
-                              }
-
-                              if (wasCompleted !== nowCompleted) {
-                                const xpChange = getXpChangeForCompletion(task);
-
-                                if (!wasCompleted && nowCompleted) {
-                                  setUserXp((prev: number) => prev + xpChange);
-                                } else if (wasCompleted && !nowCompleted) {
-                                  setUserXp((prev: number) => Math.max(0, prev - xpChange));
-                                }
-                              }
+                        <td style={{ padding: "12px 16px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              justifyContent: "flex-end",
                             }}
+                          >
+                            <button
+                              onClick={async () => {
+                                if (!authToken) return;
+                                setError(null);
 
-                              onMouseEnter={() => setHoveredButton(`dec-${task.id}`)}
+                                const wasCompleted = task.completed;
+                                const newProgress = Math.min(
+                                  100,
+                                  task.progress - 10
+                                );
+                                const nowCompleted = newProgress === 100;
+
+                                try {
+                                  await updateTaskProgress(
+                                    task.id,
+                                    newProgress,
+                                    authToken
+                                  );
+                                } catch {
+                                  return;
+                                }
+
+                                if (wasCompleted !== nowCompleted) {
+                                  const xpChange =
+                                    getXpChangeForCompletion(task);
+
+                                  if (!wasCompleted && nowCompleted) {
+                                    setUserXp(
+                                      (prev: number) => prev + xpChange
+                                    );
+                                  } else if (wasCompleted && !nowCompleted) {
+                                    setUserXp((prev: number) =>
+                                      Math.max(0, prev - xpChange)
+                                    );
+                                  }
+                                }
+                              }}
+                              onMouseEnter={() =>
+                                setHoveredButton(`dec-${task.id}`)
+                              }
                               onMouseLeave={() => setHoveredButton(null)}
                               style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: '6px',
-                                border: '1px solid #2a2a2a',
-                                background: hoveredButton === `dec-${task.id}` ? '#1a1a1a' : 'transparent',
-                                color: '#9ca3af',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                fontSize: '16px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: '600'
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "6px",
+                                border: "1px solid #2a2a2a",
+                                background:
+                                  hoveredButton === `dec-${task.id}`
+                                    ? "#1a1a1a"
+                                    : "transparent",
+                                color: "#9ca3af",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                                fontSize: "16px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: "600",
                               }}
                             >
                               −
                             </button>
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}>
-                              <div style={{
-                                width: '100px',
-                                height: '8px',
-                                background: '#1a1a1a',
-                                borderRadius: '999px',
-                                overflow: 'hidden',
-                                position: 'relative'
-                              }}>
-                                <div style={{
-                                  height: '100%',
-                                  width: `${task.progress}%`,
-                                  background: task.progress === 100
-                                    ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)'
-                                    : task.progress >= 75
-                                      ? 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)'
-                                      : task.progress >= 50
-                                        ? 'linear-gradient(90deg, #3b82f6 0%, #6366f1 100%)'
-                                        : 'linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%)',
-                                  transition: 'width 0.3s ease'
-                                }} />
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: "100px",
+                                  height: "8px",
+                                  background: "#1a1a1a",
+                                  borderRadius: "999px",
+                                  overflow: "hidden",
+                                  position: "relative",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: "100%",
+                                    width: `${task.progress}%`,
+                                    background:
+                                      task.progress === 100
+                                        ? "linear-gradient(90deg, #10b981 0%, #059669 100%)"
+                                        : task.progress >= 75
+                                          ? "linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)"
+                                          : task.progress >= 50
+                                            ? "linear-gradient(90deg, #3b82f6 0%, #6366f1 100%)"
+                                            : "linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%)",
+                                    transition: "width 0.3s ease",
+                                  }}
+                                />
                               </div>
-                              <span style={{
-                                fontSize: '13px',
-                                color: '#eeeeee',
-                                width: '40px',
-                                textAlign: 'right',
-                                fontWeight: '500'
-                              }}>
+                              <span
+                                style={{
+                                  fontSize: "13px",
+                                  color: "#eeeeee",
+                                  width: "40px",
+                                  textAlign: "right",
+                                  fontWeight: "500",
+                                }}
+                              >
                                 {task.progress}%
                               </span>
                             </div>
@@ -1621,67 +1891,104 @@ export default function TaskPage() {
                                 if (task.progress === 100) return;
 
                                 const wasCompleted = task.completed;
-                                const newProgress = Math.max(0, task.progress + 10);
+                                const newProgress = Math.max(
+                                  0,
+                                  task.progress + 10
+                                );
                                 const nowCompleted = newProgress === 100;
 
                                 try {
-                                  await updateTaskProgress(task.id, newProgress, authToken);
+                                  await updateTaskProgress(
+                                    task.id,
+                                    newProgress,
+                                    authToken
+                                  );
                                 } catch {
                                   return;
                                 }
                                 if (wasCompleted !== nowCompleted) {
-                                  const xpChange = getXpChangeForCompletion(task);
+                                  const xpChange =
+                                    getXpChangeForCompletion(task);
 
                                   if (!wasCompleted && nowCompleted) {
-                                    setUserXp((prev: number) => prev + xpChange);
+                                    setUserXp(
+                                      (prev: number) => prev + xpChange
+                                    );
                                   } else if (wasCompleted && !nowCompleted) {
-                                    setUserXp((prev: number) => Math.max(0, prev - xpChange));
+                                    setUserXp((prev: number) =>
+                                      Math.max(0, prev - xpChange)
+                                    );
                                   }
                                 }
                               }}
-
-                              onMouseEnter={() => setHoveredButton(`inc-${task.id}`)}
+                              onMouseEnter={() =>
+                                setHoveredButton(`inc-${task.id}`)
+                              }
                               onMouseLeave={() => setHoveredButton(null)}
                               style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: '6px',
-                                border: '1px solid #2a2a2a',
-                                background: hoveredButton === `inc-${task.id}` ? '#1a1a1a' : 'transparent',
-                                color: '#9ca3af',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                fontSize: '16px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: '600'
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "6px",
+                                border: "1px solid #2a2a2a",
+                                background:
+                                  hoveredButton === `inc-${task.id}`
+                                    ? "#1a1a1a"
+                                    : "transparent",
+                                color: "#9ca3af",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                                fontSize: "16px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: "600",
                               }}
                             >
                               +
                             </button>
                           </div>
                         </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'flex-end' }}>
-                            <div style={{
-                              fontSize: '18px',
-                              fontWeight: '500',
-                              color: '#9ca3af',
-                              fontFamily: '"SF Mono", "Roboto Mono", "Consolas", monospace',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '2px',
-                              letterSpacing: '0.5px'
-                            }}>
+                        <td
+                          style={{ padding: "12px 16px", textAlign: "right" }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "12px",
+                              justifyContent: "flex-end",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: "18px",
+                                fontWeight: "500",
+                                color: "#9ca3af",
+                                fontFamily:
+                                  '"SF Mono", "Roboto Mono", "Consolas", monospace',
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "2px",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
                               {(() => {
                                 const baseTime = taskTimes[task.id] || 0;
-                                const currentTime = activeTimer?.taskid === task.id ? baseTime + elapsedTime : baseTime;
+                                const currentTime =
+                                  activeTimer?.taskid === task.id
+                                    ? baseTime + elapsedTime
+                                    : baseTime;
                                 return (
                                   <>
-                                    <SlidingNumber value={Math.floor(currentTime / 60)} padStart />
+                                    <SlidingNumber
+                                      value={Math.floor(currentTime / 60)}
+                                      padStart
+                                    />
                                     <span>:</span>
-                                    <SlidingNumber value={currentTime % 60} padStart />
+                                    <SlidingNumber
+                                      value={currentTime % 60}
+                                      padStart
+                                    />
                                   </>
                                 );
                               })()}
@@ -1690,71 +1997,119 @@ export default function TaskPage() {
                               <Tooltip text="Click to stop timer">
                                 <button
                                   onClick={stopTimer}
-                                  onMouseEnter={() => setHoveredButton(`stop-timer-${task.id}`)}
+                                  onMouseEnter={() =>
+                                    setHoveredButton(`stop-timer-${task.id}`)
+                                  }
                                   onMouseLeave={() => setHoveredButton(null)}
                                   style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
                                     padding: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    transition: 'all 0.2s ease',
-                                    transform: hoveredButton === `stop-timer-${task.id}` ? 'scale(1.15)' : 'scale(1)'
+                                    display: "flex",
+                                    alignItems: "center",
+                                    transition: "all 0.2s ease",
+                                    transform:
+                                      hoveredButton === `stop-timer-${task.id}`
+                                        ? "scale(1.15)"
+                                        : "scale(1)",
                                   }}
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
-                                    <path fill="#f472b6" d="M16 22a3.003 3.003 0 0 1-3-3V5a3 3 0 0 1 6 0v14a3.003 3.003 0 0 1-3 3zm-8 0a3.003 3.003 0 0 1-3-3V5a3 3 0 0 1 6 0v14a3.003 3.003 0 0 1-3 3z"></path>
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    width="20"
+                                    height="20"
+                                  >
+                                    <path
+                                      fill="#f472b6"
+                                      d="M16 22a3.003 3.003 0 0 1-3-3V5a3 3 0 0 1 6 0v14a3.003 3.003 0 0 1-3 3zm-8 0a3.003 3.003 0 0 1-3-3V5a3 3 0 0 1 6 0v14a3.003 3.003 0 0 1-3 3z"
+                                    ></path>
                                   </svg>
                                 </button>
                               </Tooltip>
                             ) : (
-                              <Tooltip text={activeTimer ? "Another timer is running" : "Click to start timer"}>
+                              <Tooltip
+                                text={
+                                  activeTimer
+                                    ? "Another timer is running"
+                                    : "Click to start timer"
+                                }
+                              >
                                 <button
                                   onClick={() => startTimer(task.id)}
                                   disabled={!!activeTimer}
-                                  onMouseEnter={() => setHoveredButton(`start-timer-${task.id}`)}
+                                  onMouseEnter={() =>
+                                    setHoveredButton(`start-timer-${task.id}`)
+                                  }
                                   onMouseLeave={() => setHoveredButton(null)}
                                   style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: activeTimer ? 'not-allowed' : 'pointer',
+                                    background: "none",
+                                    border: "none",
+                                    cursor: activeTimer
+                                      ? "not-allowed"
+                                      : "pointer",
                                     padding: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    transition: 'all 0.2s ease',
-                                    transform: !activeTimer && hoveredButton === `start-timer-${task.id}` ? 'scale(1.15)' : 'scale(1)',
-                                    opacity: activeTimer ? 0.3 : 1
+                                    display: "flex",
+                                    alignItems: "center",
+                                    transition: "all 0.2s ease",
+                                    transform:
+                                      !activeTimer &&
+                                      hoveredButton === `start-timer-${task.id}`
+                                        ? "scale(1.15)"
+                                        : "scale(1)",
+                                    opacity: activeTimer ? 0.3 : 1,
                                   }}
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20">
-                                    <path fill="#34d399" d="M7.168 21.002a3.428 3.428 0 0 1-3.416-3.42V6.418a3.416 3.416 0 0 1 5.124-2.958l9.664 5.581a3.416 3.416 0 0 1 0 5.916l-9.664 5.581a3.41 3.41 0 0 1-1.708.463Z"></path>
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    width="20"
+                                    height="20"
+                                  >
+                                    <path
+                                      fill="#34d399"
+                                      d="M7.168 21.002a3.428 3.428 0 0 1-3.416-3.42V6.418a3.416 3.416 0 0 1 5.124-2.958l9.664 5.581a3.416 3.416 0 0 1 0 5.916l-9.664 5.581a3.41 3.41 0 0 1-1.708.463Z"
+                                    ></path>
                                   </svg>
                                 </button>
                               </Tooltip>
                             )}
                           </div>
                         </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <td
+                          style={{ padding: "12px 16px", textAlign: "right" }}
+                        >
                           <Tooltip text="Delete task">
                             <button
                               onClick={() => handleDeleteTask(task)}
-                              onMouseEnter={() => setHoveredButton(`delete-${task.id}`)}
+                              onMouseEnter={() =>
+                                setHoveredButton(`delete-${task.id}`)
+                              }
                               onMouseLeave={() => setHoveredButton(null)}
                               style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
                                 padding: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'flex-end',
-                                transition: 'all 0.2s ease',
-                                transform: hoveredButton === `delete-${task.id}` ? 'scale(1.15)' : 'scale(1)'
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                                transition: "all 0.2s ease",
+                                transform:
+                                  hoveredButton === `delete-${task.id}`
+                                    ? "scale(1.15)"
+                                    : "scale(1)",
                               }}
                             >
                               {/* simple trash icon */}
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" style={{ marginTop: '5px' }}>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                width="18"
+                                height="18"
+                                style={{ marginTop: "5px" }}
+                              >
                                 <path
                                   fill="#fca5a5"
                                   d="M9 3a1 1 0 0 0-1 1v1H5.5a1 1 0 1 0 0 2H6v11a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7h.5a1 1 0 1 0 0-2H16V4a1 1 0 0 0-1-1H9zm2 4a1 1 0 0 0-1 1v9a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1zm4 0a1 1 0 0 0-1 1v9a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1z"
