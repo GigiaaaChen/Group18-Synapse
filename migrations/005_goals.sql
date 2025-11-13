@@ -1,11 +1,11 @@
 BEGIN;
 
 -- ========================================
--- GOALS TABLE
+-- GOALS TABLE (similar style to "task")
 -- ========================================
 CREATE TABLE IF NOT EXISTS "goal" (
-    "id" UUID PRIMARY KEY,
-    "userId" UUID NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "id" TEXT PRIMARY KEY,
+    "userId" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
 
     "title" TEXT NOT NULL,
     "category" TEXT NOT NULL DEFAULT 'personal',
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS "goal" (
 
     "endDate" DATE NOT NULL,
 
-    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS "idx_goal_user" ON "goal" ("userId");
@@ -29,15 +29,15 @@ CREATE INDEX IF NOT EXISTS "idx_goal_endDate" ON "goal" ("endDate");
 -- GOAL OCCURRENCES TABLE
 -- ========================================
 CREATE TABLE IF NOT EXISTS "goal_occurrence" (
-    "id" UUID PRIMARY KEY,
-    "goalId" UUID NOT NULL REFERENCES "goal"("id") ON DELETE CASCADE,
+    "id" TEXT PRIMARY KEY,
+    "goalId" TEXT NOT NULL REFERENCES "goal"("id") ON DELETE CASCADE,
 
-    "deadline" TIMESTAMP WITH TIME ZONE NOT NULL,
+    "deadline" TIMESTAMP NOT NULL,
 
     "completed" BOOLEAN NOT NULL DEFAULT FALSE,
-    "completedAt" TIMESTAMP WITH TIME ZONE,
+    "completedAt" TIMESTAMP,
 
-    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS "idx_occ_goal" ON "goal_occurrence" ("goalId");
@@ -46,12 +46,11 @@ CREATE INDEX IF NOT EXISTS "idx_occ_deadline" ON "goal_occurrence" ("deadline");
 
 -- ========================================
 -- ENSURE DEADLINE ALWAYS HAS TIME 23:59:00
--- After insert/update, enforce that
 -- ========================================
 CREATE OR REPLACE FUNCTION enforce_1159pm_deadline()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Force deadline time to 23:59:00 if the user provided a date without time
+    -- Force deadline time to 23:59:00
     NEW.deadline := date_trunc('day', NEW.deadline) + INTERVAL '23 hours 59 minutes';
     RETURN NEW;
 END;
@@ -66,7 +65,6 @@ FOR EACH ROW EXECUTE FUNCTION enforce_1159pm_deadline();
 
 -- ========================================
 -- AUTO-CLEANUP WHEN GOAL END DATE PASSES
--- (Optional, but safe)
 -- ========================================
 CREATE OR REPLACE FUNCTION expire_old_occurrences()
 RETURNS VOID AS $$

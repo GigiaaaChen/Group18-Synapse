@@ -97,9 +97,9 @@ export default function GoalsPage() {
   const getCategoryColor = (category: string) => {
     const colors = {
       personal: { bg: "rgba(99, 102, 241, 0.1)", border: "rgba(99, 102, 241, 0.3)", text: "#a5b4fc" },
-      work:     { bg: "rgba(139, 92, 246, 0.1)", border: "rgba(139, 92, 246, 0.3)", text: "#c4b5fd" },
-      health:   { bg: "rgba(236, 72, 153, 0.1)", border: "rgba(236, 72, 153, 0.3)", text: "#f9a8d4" },
-      study:    { bg: "rgba(59, 130, 246, 0.1)", border: "rgba(59, 130, 246, 0.3)", text: "#93c5fd" }
+      work: { bg: "rgba(139, 92, 246, 0.1)", border: "rgba(139, 92, 246, 0.3)", text: "#c4b5fd" },
+      health: { bg: "rgba(236, 72, 153, 0.1)", border: "rgba(236, 72, 153, 0.3)", text: "#f9a8d4" },
+      study: { bg: "rgba(59, 130, 246, 0.1)", border: "rgba(59, 130, 246, 0.3)", text: "#93c5fd" }
     };
     return colors[category as keyof typeof colors] || colors.personal;
   };
@@ -164,10 +164,11 @@ export default function GoalsPage() {
     const goalOccs = occurrences.filter((o) => o.goalId === goal.id);
     const total = goalOccs.length;
     const completed = goalOccs.filter((o) => o.completed).length;
-    const allExpired = goalOccs.every((o) => new Date(o.deadline) < now);
+    const hasCompleted = completed > 0;
 
-    return { goal, total, completed, allExpired };
+    return { goal, total, completed, hasCompleted };
   });
+
 
   return (
     <div style={{
@@ -679,7 +680,7 @@ export default function GoalsPage() {
                                     await completeOccurrence(goal.id, occ.id, authToken);
 
                                     // Add XP client-side for instant visual update
-                                    setUserXp((xp) =>
+                                    setUserXp((xp: number) =>
                                       xp + (goal.frequency === "daily" ? 10 : 100)
                                     );
                                   }}
@@ -867,7 +868,7 @@ export default function GoalsPage() {
                   </thead>
 
                   <tbody>
-                    {completedOccurrencesByGoal.filter((g) => g.allExpired).length === 0 ? (
+                    {completedOccurrencesByGoal.filter((g) => g.hasCompleted).length === 0 ? (
                       <tr>
                         <td colSpan={5}
                           style={{
@@ -880,7 +881,7 @@ export default function GoalsPage() {
                       </tr>
                     ) : (
                       completedOccurrencesByGoal
-                        .filter((g) => g.allExpired)
+                        .filter((g) => g.hasCompleted)
                         .map(({ goal, total, completed }) => {
                           const categoryStyle = getCategoryColor(goal.category);
 

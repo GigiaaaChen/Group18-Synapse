@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser, UnauthorizedError } from "@/lib/session";
 import type { GoalDraft } from "@/types/goal";
+import { randomUUID } from "crypto";
 
+// Helper: get Sunday of the week for a given date
 function getNextSunday(date: Date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -12,6 +14,7 @@ function getNextSunday(date: Date) {
   return d;
 }
 
+// Create all occurrences for a goal up to endDate
 const createOccurrences = async (goalId: string, draft: GoalDraft) => {
   const inserts: Promise<any>[] = [];
 
@@ -39,14 +42,16 @@ const createOccurrences = async (goalId: string, draft: GoalDraft) => {
 
     if (deadline > end) break;
 
+    const occurrenceId = randomUUID();
+
     inserts.push(
       db
         .query(
           `INSERT INTO "goal_occurrence"
            ("id", "goalId", "deadline")
-           VALUES (gen_random_uuid(), $1, $2)
+           VALUES ($1, $2, $3)
            RETURNING *`,
-          [goalId, deadline.toISOString()]
+          [occurrenceId, goalId, deadline.toISOString()]
         )
         .then((res) => res.rows[0])
     );
@@ -58,55 +63,66 @@ const createOccurrences = async (goalId: string, draft: GoalDraft) => {
   return rows;
 };
 
-// GET all goals + occurrences
+// ============ GET /api/goals ============
 export const GET = async (request: NextRequest) => {
   try {
     const user = await requireUser(request);
 
-    const goals = await db.query(
+    const goalsRes = await db.query(
       `
-      SELECT * FROM "goal"
+      SELECT *
+      FROM "goal"
       WHERE "userId" = $1
       ORDER BY "createdAt" DESC
-    `,
+      `,
       [user.id]
     );
 
-    const occurrences = await db.query(
+    const occurrencesRes = await db.query(
       `
-      SELECT * FROM "goal_occurrence"
+      SELECT *
+      FROM "goal_occurrence"
       WHERE "goalId" IN (
         SELECT "id" FROM "goal" WHERE "userId" = $1
       )
       ORDER BY "deadline"
-    `,
+      `,
       [user.id]
     );
 
     return NextResponse.json({
-      goals: goals.rows,
-      occurrences: occurrences.rows,
+      goals: goalsRes.rows,
+      occurrences: occurrencesRes.rows,
     });
-  } catch (e) {
+  } catch (e: any) {
+    console.error("GET /api/goals failed:", e);
+
     if (e instanceof UnauthorizedError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.json({ error: "Failed to load goals" }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Failed to load goals" },
+      { status: 500 }
+    );
   }
 };
 
-// POST create goal
+// ============ POST /api/goals ============
 export const POST = async (request: NextRequest) => {
   try {
     const user = await requireUser(request);
     const body = (await request.json()) as GoalDraft;
 
-    const goalInsert = await db.query(
+    const goalId = randomUUID();
+
+    const goalRes = await db.query(
       `INSERT INTO "goal"
        ("id", "userId", "title", "category", "frequency", "repeatDay", "endDate")
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
+        goalId,
         user.id,
         body.title,
         body.category,
@@ -116,12 +132,16 @@ export const POST = async (request: NextRequest) => {
       ]
     );
 
-    const goal = goalInsert.rows[0];
+    const goal = goalRes.rows[0];
+
     const occurrences = await createOccurrences(goal.id, body);
 
     return NextResponse.json({ goal, occurrences }, { status: 201 });
   } catch (e) {
-    console.error("Failed to create goal", e);
-    return NextResponse.json({ error: "Failed to create goal" }, { status: 400 });
+    console.error("POST /api/goals failed:", e);
+    return NextResponse.json(
+      { error: "Failed to create goal" },
+      { status: 400 }
+    );
   }
 };
