@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { requireUser, UnauthorizedError } from "@/lib/session";
-import type { Task } from "@/types/task";
+import type { Task, GoalFrequency } from "@/types/task";
 
 interface TaskRow {
   id: string;
@@ -13,6 +13,8 @@ interface TaskRow {
   completed: boolean;
   progress: number;
   completedAt: string | null;
+  isGoal: boolean;
+  goalFrequency: GoalFrequency;
 }
 
 const mapRowToTask = (row: TaskRow): Task => ({
@@ -23,6 +25,8 @@ const mapRowToTask = (row: TaskRow): Task => ({
   completed: row.completed,
   progress: row.progress,
   completedAt: row.completedAt,
+  isGoal: row.isGoal,
+  goalFrequency: row.goalFrequency,
 });
 
 export const PATCH = async (
@@ -93,6 +97,39 @@ export const PATCH = async (
       values.push(progress);
     }
 
+    if (body.isGoal !== undefined) {
+      updates.push(`"isGoal" = $${index++}`);
+      values.push(Boolean(body.isGoal));
+
+      if (body.isGoal) {
+        updates.push(`"dueDate" = NULL`);
+
+        const freq = body.goalFrequency;
+        if (freq !== "daily" && freq !== "weekly") {
+          throw new Error(
+            "Goal frequency must be 'daily' or 'weekly' when setting a goal",
+          );
+        }
+        updates.push(`"goalFrequency" = $${index++}`);
+        values.push(freq);
+      } else {
+        updates.push(`"goalFrequency" = NULL`);
+      }
+    } else if (body.goalFrequency !== undefined) {
+      if (body.goalFrequency === null) {
+        updates.push(`"goalFrequency" = NULL`);
+      } else if (
+        body.goalFrequency === "daily" ||
+        body.goalFrequency === "weekly"
+      ) {
+        updates.push(`"goalFrequency" = $${index++}`);
+        values.push(body.goalFrequency);
+      } else {
+        throw new Error("Invalid goal frequency");
+      }
+    }
+
+
     if (updates.length === 0) {
       return NextResponse.json(
         { error: "No valid fields provided" },
@@ -120,6 +157,8 @@ export const PATCH = async (
           "category",
           "completed",
           "progress",
+          "isGoal",
+          "goalFrequency",
           to_char("completedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS "completedAt"
       `,
       values,

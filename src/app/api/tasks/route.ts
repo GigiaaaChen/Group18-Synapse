@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { requireUser, UnauthorizedError } from "@/lib/session";
-import type { Task, TaskDraft } from "@/types/task";
+import type { Task, TaskDraft, GoalFrequency } from "@/types/task";
 
 interface TaskRow {
   id: string;
@@ -13,6 +13,8 @@ interface TaskRow {
   completed: boolean;
   progress: number;
   completedAt: string | null;
+  isGoal: boolean;
+  goalFrequency: GoalFrequency;
 }
 
 const mapRowToTask = (row: TaskRow): Task => ({
@@ -23,25 +25,50 @@ const mapRowToTask = (row: TaskRow): Task => ({
   completed: row.completed,
   progress: row.progress,
   completedAt: row.completedAt,
+  isGoal: row.isGoal,
+  goalFrequency: row.goalFrequency,
 });
 
-const sanitizeDraft = (draft: TaskDraft) => {
+const sanitizeDraft = (draft: Partial<TaskDraft>): TaskDraft => {
   const title = draft.title?.trim();
   if (!title) {
     throw new Error("Title is required");
   }
 
+  const category = draft.category?.trim() || "personal";
+  const completed = draft.completed ?? false;
+
   const progress =
-    typeof draft.progress === "number"
-      ? Math.min(Math.max(draft.progress, 0), 100)
+    typeof draft.progress === "number" && draft.progress >= 0
+      ? draft.progress
       : 0;
+
+  let dueDate: string | null = draft.dueDate ?? null;
+  if (dueDate === "") {
+    dueDate = null;
+  }
+
+  const isGoal = draft.isGoal ?? false;
+  let goalFrequency: GoalFrequency = draft.goalFrequency ?? null;
+
+  if (isGoal) {
+    dueDate = null;
+
+    if (goalFrequency !== "daily" && goalFrequency !== "weekly") {
+      throw new Error("Goal frequency must be 'daily' or 'weekly' for goals");
+    }
+  } else {
+    goalFrequency = null;
+  }
 
   return {
     title,
-    dueDate: draft.dueDate || null,
-    category: draft.category || "personal",
-    completed: Boolean(draft.completed),
+    category,
+    completed,
     progress,
+    dueDate,
+    isGoal,
+    goalFrequency,
   };
 };
 
@@ -49,22 +76,25 @@ export const GET = async (request: NextRequest) => {
   try {
     const user = await requireUser(request);
 
-    const result = await db.query(
-      `
-        SELECT
-          id,
-          "title",
-          to_char("dueDate", 'YYYY-MM-DD') AS "dueDate",
-          "category",
-          "completed",
-          "progress",
-          to_char("completedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS "completedAt"
-        FROM "task"
-        WHERE "userId" = $1
-        ORDER BY "createdAt" DESC
-      `,
-      [user.id],
-    );
+  const result = await db.query<TaskRow>(
+    `
+          SELECT
+            "id",
+            "title",
+            to_char("dueDate", 'YYYY-MM-DD') AS "dueDate",
+            "category",
+            "completed",
+            "progress",
+            "isGoal",
+            "goalFrequency",
+            to_char("completedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS "completedAt"
+          FROM "task"
+          WHERE "userId" = $1
+          ORDER BY "createdAt" DESC
+        `,
+    [user.id],
+  );
+
 
     return NextResponse.json(result.rows.map(mapRowToTask));
   } catch (error) {
@@ -85,16 +115,18 @@ export const POST = async (request: NextRequest) => {
     const body = (await request.json()) as Partial<TaskDraft>;
 
     const prepared = sanitizeDraft({
-      title: body.title ?? "",
-      dueDate: body.dueDate ?? null,
-      category: body.category ?? "personal",
-      completed: body.completed ?? false,
-      progress: body.progress ?? 0,
+      title: body.title,
+      dueDate: body.dueDate,
+      category: body.category,
+      completed: body.completed,
+      progress: body.progress,
+      isGoal: body.isGoal,
+      goalFrequency: body.goalFrequency,
     });
 
     const id = crypto.randomUUID();
 
-    const result = await db.query(
+    const result = await db.query<TaskRow>(
       `
         INSERT INTO "task" (
           "id",
@@ -103,17 +135,21 @@ export const POST = async (request: NextRequest) => {
           "dueDate",
           "category",
           "completed",
-          "progress"
+          "progress",
+          "isGoal",
+          "goalFrequency"
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING
-          id,
+          "id",
           "title",
-          to_char("dueDate", 'YYYY-MM-DD') AS "dueDate",
+          "dueDate",
           "category",
           "completed",
           "progress",
-          to_char("completedAt", 'YYYY-MM-DD"T"HH24:MI:SS') AS "completedAt"
+          "completedAt",
+          "isGoal",
+          "goalFrequency"
       `,
       [
         id,
@@ -123,6 +159,8 @@ export const POST = async (request: NextRequest) => {
         prepared.category,
         prepared.completed,
         prepared.progress,
+        prepared.isGoal,
+        prepared.goalFrequency,
       ],
     );
 
