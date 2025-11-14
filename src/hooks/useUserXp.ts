@@ -24,9 +24,54 @@ const clearXpStorage = () => {
 	window.sessionStorage.removeItem(`${XP_STORAGE_PREFIX}${cachedXpToken}`);
 };
 
+const xpListeners = new Set<(value: number) => void>();
+const notifyXpListeners = (value: number) => {
+	for (const listener of xpListeners) {
+		listener(value);
+	}
+};
+
 const getCachedXp = (token?: string | null) => {
 	if (!token || !hasCachedXp || cachedXpToken !== token) return undefined;
 	return cachedXpValue;
+};
+
+const setCachedXp = (token: string, value: number) => {
+	cachedXpToken = token;
+	cachedXpValue = value;
+	hasCachedXp = true;
+	writeXpToStorage(token, value);
+	notifyXpListeners(value);
+};
+
+const resetCachedXp = () => {
+	hasCachedXp = false;
+	cachedXpToken = null;
+	cachedXpValue = 0;
+	notifyXpListeners(0);
+};
+
+const fetchXpFromApi = async (token: string) => {
+	const res = await fetch("/api/user", {
+		headers: { Authorization: `Bearer ${token}` },
+	});
+	if (!res.ok) {
+		const message = await res.text().catch(() => "Failed to fetch user");
+		throw new Error(message);
+	}
+	const data = await res.json();
+	const nextXp = data.xp || 0;
+	setCachedXp(token, nextXp);
+	return nextXp;
+};
+
+export const refreshUserXp = async (token?: string | null) => {
+	if (!token) return;
+	try {
+		await fetchXpFromApi(token);
+	} catch (err) {
+		console.error("Failed to refresh user XP:", err);
+	}
 };
 
 export const useUserXp = () => {
@@ -40,9 +85,7 @@ export const useUserXp = () => {
 			}
 			const stored = readXpFromStorage(authToken);
 			if (stored !== null) {
-				cachedXpToken = authToken;
-				cachedXpValue = stored;
-				hasCachedXp = true;
+				setCachedXp(authToken, stored);
 				return stored;
 			}
 		} else if (hasCachedXp) {
@@ -52,13 +95,19 @@ export const useUserXp = () => {
 	});
 
 	useEffect(() => {
+		const listener = (value: number) => setXp(value);
+		xpListeners.add(listener);
+		return () => {
+			xpListeners.delete(listener);
+		};
+	}, []);
+
+	useEffect(() => {
 		if (isPending) return;
 
 		if (!session) {
 			clearXpStorage();
-			hasCachedXp = false;
-			cachedXpToken = null;
-			cachedXpValue = 0;
+			resetCachedXp();
 			setXp(0);
 			return;
 		}
@@ -71,9 +120,7 @@ export const useUserXp = () => {
 		} else {
 			const stored = readXpFromStorage(authToken);
 			if (stored !== null) {
-				cachedXpToken = authToken;
-				cachedXpValue = stored;
-				hasCachedXp = true;
+				setCachedXp(authToken, stored);
 				setXp(stored);
 			}
 		}
@@ -82,20 +129,11 @@ export const useUserXp = () => {
 
 		const fetchXp = async () => {
 			try {
-				const res = await fetch("/api/user", {
-					headers: { Authorization: `Bearer ${authToken}` },
-				});
-				if (!res.ok) return;
-				const data = await res.json();
-				if (isCancelled) return;
-				const nextXp = data.xp || 0;
-				cachedXpToken = authToken;
-				cachedXpValue = nextXp;
-				hasCachedXp = true;
-				writeXpToStorage(authToken, nextXp);
-				setXp(nextXp);
+				await fetchXpFromApi(authToken);
 			} catch (err) {
-				console.error("Error fetching user XP:", err);
+				if (!isCancelled) {
+					console.error("Error fetching user XP:", err);
+				}
 			}
 		};
 

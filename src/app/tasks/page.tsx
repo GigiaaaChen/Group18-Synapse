@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useTaskStore } from "@/stores/taskStore";
 import { Tooltip } from "@/components/Tooltip";
@@ -14,8 +14,8 @@ import {
   HistoryIcon,
 } from "@/components/icons";
 import { SlidingNumber } from "@/components/SlidingNumber";
-import { useUserXp } from "@/hooks/useUserXp";
-import { usePetData } from "@/hooks/usePetData";
+import { useUserXp, refreshUserXp } from "@/hooks/useUserXp";
+import { usePetData, refreshPetData } from "@/hooks/usePetData";
 import { PetDisplay } from "@/components/pet/PetDisplay";
 import { HappinessIcon } from "@/components/pet/PetIcons";
 
@@ -160,6 +160,14 @@ export default function TaskPage() {
   }, [session, isPending, router]);
 
   const authToken = session?.session?.token;
+
+  const refreshUserAndPet = useCallback(async () => {
+    if (!authToken) return;
+    await Promise.all([
+      refreshUserXp(authToken),
+      refreshPetData(authToken),
+    ]).catch(() => {});
+  }, [authToken]);
 
   useEffect(() => {
     if (!authToken) return;
@@ -1672,6 +1680,7 @@ export default function TaskPage() {
                                 await toggleTask(task.id, authToken).catch(
                                   () => {}
                                 );
+                                await refreshUserAndPet();
 
                               }}
                               style={{
@@ -1977,6 +1986,7 @@ export default function TaskPage() {
                                 }
 
                                 if (wasCompleted !== nowCompleted) {
+                                  await refreshUserAndPet();
                                 }
                               }}
                               onMouseEnter={() =>
@@ -2073,6 +2083,7 @@ export default function TaskPage() {
                                   return;
                                 }
                                 if (wasCompleted !== nowCompleted) {
+                                  await refreshUserAndPet();
                                 }
                               }}
                               onMouseEnter={() =>

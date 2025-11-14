@@ -34,11 +34,19 @@ const clearPetStorage = () => {
   window.sessionStorage.removeItem(`${PET_STORAGE_PREFIX}${cachedPetToken}`);
 };
 
+const petListeners = new Set<(value: any) => void>();
+const notifyPetListeners = (value: any) => {
+  for (const listener of petListeners) {
+    listener(value);
+  }
+};
+
 export const updatePetCache = (token: string, value: any) => {
   cachedPetToken = token;
   cachedPetValue = value;
   hasCachedPet = true;
   writePetToStorage(token, value);
+  notifyPetListeners(value);
 };
 
 export const clearPetCache = () => {
@@ -46,11 +54,34 @@ export const clearPetCache = () => {
   cachedPetToken = null;
   cachedPetValue = null;
   clearPetStorage();
+  notifyPetListeners(null);
 };
 
 const getCachedPetData = (token?: string | null) => {
   if (!token || !hasCachedPet || cachedPetToken !== token) return undefined;
   return cachedPetValue;
+};
+
+const fetchPetFromApi = async (token: string) => {
+  const res = await fetch("/api/pet", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const message = await res.text().catch(() => "Failed to fetch pet data");
+    throw new Error(message);
+  }
+  const data = await res.json();
+  updatePetCache(token, data);
+  return data;
+};
+
+export const refreshPetData = async (token?: string | null) => {
+  if (!token) return;
+  try {
+    await fetchPetFromApi(token);
+  } catch (err) {
+    console.error("Failed to refresh pet data:", err);
+  }
 };
 
 export const usePetData = () => {
@@ -72,6 +103,14 @@ export const usePetData = () => {
     }
     return null;
   });
+
+  useEffect(() => {
+    const listener = (value: any) => setPetData(value);
+    petListeners.add(listener);
+    return () => {
+      petListeners.delete(listener);
+    };
+  }, []);
 
   useEffect(() => {
     if (isPending) return;
@@ -99,16 +138,11 @@ export const usePetData = () => {
 
     const fetchPetData = async () => {
       try {
-        const res = await fetch("/api/pet", {
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isCancelled) return;
-        updatePetCache(authToken, data);
-        setPetData(data);
+        await fetchPetFromApi(authToken);
       } catch (err) {
-        console.error("Error fetching pet data:", err);
+        if (!isCancelled) {
+          console.error("Error fetching pet data:", err);
+        }
       }
     };
 
