@@ -1,4 +1,5 @@
 import { Task } from "@/types/history";
+import { CoinIcon } from "@/components/pet/PetIcons";
 
 type TaskListProps = {
   tasks: Task[];
@@ -16,12 +17,23 @@ export default function TaskList({ tasks, title }: TaskListProps) {
           {tasks.map(task => (
             <li
               key={task.id}
-              className="flex justify-between items-center px-3 py-2 rounded-lg bg-[#1f1f1f] text-sm"
+              className="flex flex-col gap-2 px-3 py-2 rounded-lg bg-[#1f1f1f] text-sm"
             >
-              <span className="text-gray-100">{task.title}</span>
-              <span className="text-xs text-gray-500">
-                {new Date(task.completedAt).toLocaleString()}
-              </span>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-100 font-medium">{task.title}</span>
+                <span className="text-xs text-gray-500">
+                  {new Date(task.completedAt).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-1">
+                  <span className="text-indigo-400 font-semibold">+{task.xpAwarded} XP</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <CoinIcon size={14} />
+                  <span className="text-amber-400 font-semibold">+{task.coinsAwarded}</span>
+                </div>
+              </div>
             </li>
           ))}
         </ul>

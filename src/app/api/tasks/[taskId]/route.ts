@@ -178,14 +178,31 @@ export const PATCH = async (
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    // Handle XP changes for completing/uncompleting tasks
+    // Handle XP and coin changes for completing/uncompleting tasks
     if (isCompletingTask || isUncompletingTask) {
       const completedAt = new Date();
       const dueDate = taskDueDate ? new Date(taskDueDate) : null;
       let xpChange = 0;
+      let coinChange = 1; // Base coin reward
+
+      // Calculate time spent on task from task_session table
+      const sessionResult = await db.query(
+        `SELECT
+          COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(stoppedat, NOW()) - startedat))), 0) as total_seconds
+         FROM task_session
+         WHERE taskid = $1 AND userid = $2`,
+        [taskId, user.id],
+      );
+
+      const totalSeconds = Number(sessionResult.rows[0]?.total_seconds || 0);
+      const totalMinutes = totalSeconds / 60;
 
       if (taskIsGoal && taskGoalFrequency === "weekly") {
         xpChange = 30;
+        coinChange = 3; // 3x coins for weekly goals
+
+        // Bonus XP for time spent (1 XP per 10 minutes)
+        xpChange += Math.floor(totalMinutes / 10);
       }
       else if (dueDate) {
         const completedDate = new Date(completedAt.toDateString());
@@ -194,19 +211,53 @@ export const PATCH = async (
         if (completedDate <= dueDateOnly) {
           xpChange = 10;
         } else {
-          xpChange = 5;
+          xpChange = 5; // Late penalty for XP
         }
+        // Coins stay 1 regardless of late/on-time
+
+        // Bonus XP for time spent (1 XP per 10 minutes)
+        xpChange += Math.floor(totalMinutes / 10);
       }
       else {
         xpChange = 10;
+
+        // Bonus XP for time spent (1 XP per 10 minutes)
+        xpChange += Math.floor(totalMinutes / 10);
       }
 
-      // Add XP for completing, subtract XP for uncompleting
+      // Add for completing, subtract for uncompleting
       const xpModifier = isCompletingTask ? xpChange : -xpChange;
+      const coinModifier = isCompletingTask ? coinChange : -coinChange;
 
+      // Store awarded amounts in task table
+      if (isCompletingTask) {
+        await db.query(
+          `UPDATE task SET "xpAwarded" = $1, "coinsAwarded" = $2 WHERE id = $3`,
+          [xpChange, coinChange, taskId],
+        );
+      } else {
+        // Reset awarded amounts when uncompleting
+        await db.query(
+          `UPDATE task SET "xpAwarded" = 0, "coinsAwarded" = 0 WHERE id = $1`,
+          [taskId],
+        );
+      }
+
+      // Update user XP
       await db.query(
         `UPDATE "user" SET "xp" = GREATEST(COALESCE("xp", 0) + $1, 0) WHERE "id" = $2`,
         [xpModifier, user.id],
+      );
+
+      // Update pet coins (create pet record if it doesn't exist)
+      await db.query(
+        `
+        INSERT INTO pet (id, "userId", coins)
+        VALUES (gen_random_uuid()::text, $1, $2)
+        ON CONFLICT ("userId")
+        DO UPDATE SET coins = GREATEST(COALESCE(pet.coins, 0) + $2, 0)
+        `,
+        [user.id, coinModifier],
       );
     }
 
@@ -229,10 +280,10 @@ export const DELETE = async (
     const { taskId } = await params;
     const user = await requireUser(request);
 
-    /********** deleting task and modifying current xp */ 
+    /********** deleting task and modifying current xp and coins */
     const existing = await db.query(
       `
-        SELECT "completed", "dueDate", "completedAt"
+        SELECT "completed", "xpAwarded", "coinsAwarded"
         FROM "task"
         WHERE "userId" = $1
           AND "id" = $2
@@ -241,49 +292,33 @@ export const DELETE = async (
     );
 
     const row = existing.rows[0] as
-      | { completed: boolean; dueDate: string | null; completedAt: string | null }
-      | undefined; // using typescript type assertion
+      | { completed: boolean; xpAwarded: number; coinsAwarded: number }
+      | undefined;
 
     if (!row) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    // If the task was completed, subtract the XP it had given
-    let xpModifier = 0;
-
+    // If the task was completed, subtract the XP and coins it had given
     if (row.completed) {
-      const dueDate = row.dueDate ? new Date(row.dueDate) : null;
-      const completedAt = row.completedAt ? new Date(row.completedAt) : new Date();
+      const xpModifier = -(row.xpAwarded || 0);
+      const coinModifier = -(row.coinsAwarded || 0);
 
-      let xpChange = 0;
-
-      if (dueDate) {
-        const completedDate = new Date(completedAt.toDateString());
-        const dueDateOnly = new Date(dueDate.toDateString());
-
-        // on time
-        if (completedDate <= dueDateOnly) {
-          xpChange = 10; 
-        } 
-        // late
-        else {
-          xpChange = 5; 
-        }
-      } 
-      // no due date
-      else {
-        xpChange = 10;
+      // Update user XP
+      if (xpModifier !== 0) {
+        await db.query(
+          `UPDATE "user" SET "xp" = GREATEST(COALESCE("xp", 0) + $1, 0) WHERE "id" = $2`,
+          [xpModifier, user.id],
+        );
       }
 
-      // Deleting a completed task should REMOVE that XP
-      xpModifier = -xpChange;
-    }
-
-    if (xpModifier !== 0) {
-      await db.query(
-        `UPDATE "user" SET "xp" = GREATEST(COALESCE("xp", 0) + $1, 0) WHERE "id" = $2`,
-        [xpModifier, user.id],
-      );
+      // Update pet coins
+      if (coinModifier !== 0) {
+        await db.query(
+          `UPDATE pet SET coins = GREATEST(COALESCE(coins, 0) + $1, 0) WHERE "userId" = $2`,
+          [coinModifier, user.id],
+        );
+      }
     }
 
     /********** finished deleting task and modifying current xp */

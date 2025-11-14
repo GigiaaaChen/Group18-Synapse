@@ -12,20 +12,25 @@ export const GET = async (request: NextRequest) => {
     if (!username || username.length < 3) {
       return NextResponse.json(
         { available: false, error: "Username must be at least 3 characters" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    if (!/^[a-z0-9_]+$/.test(username)) { // sanity check before doing anything
+    if (!/^[a-z0-9_]+$/.test(username)) {
+      // sanity check before doing anything
       return NextResponse.json(
-        { available: false, error: "Username can only contain lowercase letters, numbers, and underscores" },
-        { status: 400 },
+        {
+          available: false,
+          error:
+            "Username can only contain lowercase letters, numbers, and underscores",
+        },
+        { status: 400 }
       );
     }
 
     const result = await db.query(
       `SELECT "username" FROM "user" WHERE "username" = $1`,
-      [username],
+      [username]
     );
 
     const available = result.rows.length === 0;
@@ -35,7 +40,7 @@ export const GET = async (request: NextRequest) => {
     console.error("Failed to check username", error);
     return NextResponse.json(
       { error: "Failed to check username" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 };

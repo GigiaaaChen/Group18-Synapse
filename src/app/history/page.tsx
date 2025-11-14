@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -10,29 +11,87 @@ import {
   SynapseLogo,
   HistoryIcon,
 } from "@/components/icons";
-import Timeline from "@/components/history/Timeline";
-import TaskList from "@/components/history/TaskList";
-import { mockEvolutions, mockTasks } from "@/types/history.mock";
-import type { Evolution, Task } from "@/types/history";
+import type { Task } from "@/types/history";
+import { useUserXp } from "@/hooks/useUserXp";
+import { usePetData } from "@/hooks/usePetData";
+import { PetDisplay } from "@/components/pet/PetDisplay";
+import { HappinessIcon } from "@/components/pet/PetIcons";
+
+interface LevelBreakdown {
+  level: number;
+  startXP: number;
+  endXP: number;
+  tasks: Task[];
+  totalXP: number;
+  totalCoins: number;
+}
 
 export default function HistoryPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
 
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
-  const [userXp, setUserXp] = useState<number>((session?.user as any)?.xp ?? 0);
+  const userXp = useUserXp();
 
-  const [selectedEvolutionId, setSelectedEvolutionId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const petData = usePetData();
 
   useEffect(() => {
     if (!isPending && !session) router.push("/signin");
   }, [session, isPending, router]);
 
+  const authToken = session?.session?.token;
+
   useEffect(() => {
-    if (session?.user) setUserXp((session.user as any)?.xp ?? 0);
-  }, [session]);
+    const fetchHistory = async () => {
+      if (!authToken) return;
+
+      setLoading(true);
+      try {
+        const res = await fetch("/api/history", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (!res.ok) {
+          console.error("Failed to fetch history", await res.text());
+          return;
+        }
+        const data = await res.json();
+        setTasks(data.tasks || []);
+      } catch (err) {
+        console.error("Error fetching history:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [authToken]);
+
+  if (isPending && !session) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          minHeight: "100vh",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#121212",
+          color: "#9ca3af",
+          fontSize: "14px",
+        }}
+      >
+        Loading...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return null;
+  }
 
   const userInitial = useMemo(
     () =>
@@ -44,66 +103,70 @@ export default function HistoryPage() {
     [session?.user]
   );
 
-  const sortedEvolutions: Evolution[] = useMemo(
-    () =>
-      [...mockEvolutions].sort(
-        (a, b) => new Date(a.evolvedAt).getTime() - new Date(b.evolvedAt).getTime()
-      ),
-    []
-  );
-
-  const filteredEvolutions: Evolution[] = useMemo(() => {
-    return sortedEvolutions.filter((evo) => {
-      const t = new Date(evo.evolvedAt).getTime();
-      const afterStart = startDate ? t >= new Date(startDate).getTime() : true;
-      const beforeEnd = endDate ? t <= new Date(endDate).getTime() : true;
-      return afterStart && beforeEnd;
-    });
-  }, [sortedEvolutions, startDate, endDate]);
-
-  const stageTasks: Task[] = useMemo(() => {
-    const tasksInRange = mockTasks.filter((task) => {
+  // Filter tasks by date range
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
       const t = new Date(task.completedAt).getTime();
       const afterStart = startDate ? t >= new Date(startDate).getTime() : true;
       const beforeEnd = endDate ? t <= new Date(endDate).getTime() : true;
       return afterStart && beforeEnd;
     });
+  }, [tasks, startDate, endDate]);
 
-    if (!selectedEvolutionId) return tasksInRange;
+  // Group tasks by level
+  const levelBreakdowns: LevelBreakdown[] = useMemo(() => {
+    if (filteredTasks.length === 0) return [];
 
-    const index = sortedEvolutions.findIndex((e) => e.id === selectedEvolutionId);
-    if (index === -1) return tasksInRange;
+    const breakdowns: LevelBreakdown[] = [];
+    let runningXP = 0;
+    let currentLevel = 1;
+    let currentLevelTasks: Task[] = [];
+    let currentLevelStartXP = 0;
 
-    const current = sortedEvolutions[index];
-    const previous = sortedEvolutions[index - 1] ?? null;
+    filteredTasks.forEach((task) => {
+      const newXP = runningXP + task.xpAwarded;
+      const newLevel = Math.floor(newXP / 100) + 1;
 
-    const fromTime = previous ? new Date(previous.evolvedAt).getTime() : -Infinity;
-    const toTime = new Date(current.evolvedAt).getTime();
+      currentLevelTasks.push(task);
+      runningXP = newXP;
 
-    return tasksInRange.filter((task) => {
-      const t = new Date(task.completedAt).getTime();
-      return t > fromTime && t <= toTime;
+      // If we leveled up, save the previous level breakdown
+      if (newLevel > currentLevel) {
+        const totalXP = currentLevelTasks.reduce((sum, t) => sum + t.xpAwarded, 0);
+        const totalCoins = currentLevelTasks.reduce((sum, t) => sum + t.coinsAwarded, 0);
+
+        breakdowns.push({
+          level: currentLevel,
+          startXP: currentLevelStartXP,
+          endXP: currentLevel * 100,
+          tasks: [...currentLevelTasks],
+          totalXP,
+          totalCoins,
+        });
+
+        currentLevel = newLevel;
+        currentLevelStartXP = (currentLevel - 1) * 100;
+        currentLevelTasks = [];
+      }
     });
-  }, [selectedEvolutionId, sortedEvolutions, startDate, endDate]);
 
-  if (isPending) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          minHeight: "100vh",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#121212",
-          color: "#9ca3af",
-          fontSize: 14,
-        }}
-      >
-        Loading...
-      </div>
-    );
-  }
-  if (!session) return null;
+    // Add the final level (current level)
+    if (currentLevelTasks.length > 0) {
+      const totalXP = currentLevelTasks.reduce((sum, t) => sum + t.xpAwarded, 0);
+      const totalCoins = currentLevelTasks.reduce((sum, t) => sum + t.coinsAwarded, 0);
+
+      breakdowns.push({
+        level: currentLevel,
+        startXP: currentLevelStartXP,
+        endXP: runningXP,
+        tasks: currentLevelTasks,
+        totalXP,
+        totalCoins,
+      });
+    }
+
+    return breakdowns;
+  }, [filteredTasks]);
 
   return (
     <div
@@ -145,8 +208,8 @@ export default function HistoryPage() {
             gap: 4,
           }}
         >
-          <button
-            onClick={() => router.push("/tasks")}
+          <Link
+            href="/tasks"
             onMouseEnter={() => setHoveredButton("tasks")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
@@ -155,7 +218,7 @@ export default function HistoryPage() {
               gap: 12,
               padding: "12px 16px",
               borderRadius: 8,
-              border: "none",
+              textDecoration: "none",
               background: hoveredButton === "tasks" ? "#1a1a1a" : "transparent",
               color: "#9ca3af",
               fontSize: 15,
@@ -167,10 +230,10 @@ export default function HistoryPage() {
           >
             <TasksIcon active={false} />
             Tasks
-          </button>
+          </Link>
 
-          <button
-            onClick={() => router.push("/friends")}
+          <Link
+            href="/friends"
             onMouseEnter={() => setHoveredButton("friends")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
@@ -179,8 +242,9 @@ export default function HistoryPage() {
               gap: 12,
               padding: "12px 16px",
               borderRadius: 8,
-              border: "none",
-              background: hoveredButton === "friends" ? "#1a1a1a" : "transparent",
+              textDecoration: "none",
+              background:
+                hoveredButton === "friends" ? "#1a1a1a" : "transparent",
               color: "#9ca3af",
               fontSize: 15,
               fontWeight: 500,
@@ -191,10 +255,10 @@ export default function HistoryPage() {
           >
             <FriendsIcon active={false} />
             Friends
-          </button>
+          </Link>
 
-          <button
-            onClick={() => router.push("/pet")}
+          <Link
+            href="/pet"
             onMouseEnter={() => setHoveredButton("pet")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
@@ -203,7 +267,7 @@ export default function HistoryPage() {
               gap: 12,
               padding: "12px 16px",
               borderRadius: 8,
-              border: "none",
+              textDecoration: "none",
               background: hoveredButton === "pet" ? "#1a1a1a" : "transparent",
               color: "#9ca3af",
               fontSize: 15,
@@ -215,16 +279,18 @@ export default function HistoryPage() {
           >
             <PetIcon active={false} />
             Pet
-          </button>
+          </Link>
 
-          <button
+          <Link
+            href="/history"
+            aria-current="page"
             style={{
               display: "flex",
               alignItems: "center",
               gap: 12,
               padding: "12px 16px",
               borderRadius: 8,
-              border: "none",
+              textDecoration: "none",
               background: "#1a1a1a",
               color: "#eeeeee",
               fontSize: 15,
@@ -235,8 +301,122 @@ export default function HistoryPage() {
           >
             <HistoryIcon active />
             History
-          </button>
+          </Link>
         </nav>
+
+        {/* Pet Section */}
+        {petData && (
+          <div
+            style={{
+              margin: "12px",
+              padding: "20px 16px",
+              borderRadius: "16px",
+              background: "linear-gradient(135deg, #1e1e1e 0%, #2a2a2a 100%)",
+              border: "1px solid #3a3a3a",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <PetDisplay
+                equippedItems={petData.equippedItems || []}
+                stage={petData.stage}
+                size={140}
+              />
+            </div>
+
+            {/* Happiness Bar */}
+            <div style={{ marginBottom: "12px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "6px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "500",
+                    color: "#9ca3af",
+                  }}
+                >
+                  Happiness
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <HappinessIcon happiness={petData.happiness} size={14} />
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      color: "#eeeeee",
+                    }}
+                  >
+                    {petData.happiness}/100
+                  </span>
+                </div>
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: "6px",
+                  background: "#1a1a1a",
+                  borderRadius: "999px",
+                  overflow: "hidden",
+                  border: "1px solid #2a2a2a",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${petData.happiness}%`,
+                    background:
+                      petData.happiness >= 66
+                        ? "linear-gradient(90deg, #10b981 0%, #059669 100%)"
+                        : petData.happiness >= 33
+                          ? "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)"
+                          : "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)",
+                    borderRadius: "999px",
+                    transition: "all 0.5s ease",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Manage Pet Button */}
+            <Link
+              href="/pet"
+              onMouseEnter={() => setHoveredButton("managepet")}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "6px",
+                border: "1px solid #3a3a3a",
+                background:
+                  hoveredButton === "managepet"
+                    ? "linear-gradient(90deg, #4972e1 0%, #6366f1 100%)"
+                    : "#2a2a2a",
+                color: hoveredButton === "managepet" ? "#ffffff" : "#e5e7eb",
+                fontSize: "13px",
+                fontWeight: "500",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                textDecoration: "none",
+                display: "inline-flex",
+                justifyContent: "center",
+              }}
+            >
+              Manage Pet
+            </Link>
+          </div>
+        )}
 
         <div style={{ padding: 16 }}>
           <div
@@ -350,7 +530,7 @@ export default function HistoryPage() {
                   marginBottom: 4,
                 }}
               >
-                Pet Growth History
+                Level Progression History
               </h1>
               <p
                 style={{
@@ -358,16 +538,40 @@ export default function HistoryPage() {
                   color: "#9ca3af",
                 }}
               >
-                See how your completed tasks contributed to your pet&apos;s evolution.
+                See which tasks contributed to each level milestone.
               </p>
             </div>
           </div>
+
+          {loading && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "#9ca3af",
+                fontSize: 12,
+                marginBottom: 16,
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "9999px",
+                  background: "linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)",
+                  boxShadow: "0 0 6px rgba(99, 102, 241, 0.6)",
+                }}
+              />
+              Syncing recent history...
+            </div>
+          )}
 
           <div
             style={{
               display: "flex",
               gap: 16,
-              marginBottom: 20,
+              marginBottom: 24,
               alignItems: "flex-end",
             }}
           >
@@ -421,99 +625,155 @@ export default function HistoryPage() {
             </div>
           </div>
 
-          <div style={{ marginBottom: 24 }}>
-            <Timeline
-              evolutions={filteredEvolutions}
-              selectedId={selectedEvolutionId}
-              onSelect={setSelectedEvolutionId}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)",
-              gap: 20,
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  fontSize: 18,
-                  fontWeight: 600,
-                  color: "#e5e7eb",
-                  marginBottom: 8,
-                }}
-              >
-                Evolution History
-              </h2>
-              <div
-                style={{
-                  borderRadius: 16,
-                  border: "1px solid #374151",
-                  background: "#151515",
-                }}
-              >
-                {filteredEvolutions.length === 0 ? (
+          {levelBreakdowns.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "48px",
+                color: "#9ca3af",
+                fontSize: 14,
+              }}
+            >
+              {loading ? "Loading history..." : "No completed tasks in this date range."}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {levelBreakdowns.map((breakdown) => (
+                <div
+                  key={breakdown.level}
+                  style={{
+                    background: "#151515",
+                    borderRadius: 16,
+                    border: "1px solid #374151",
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* Level Header */}
                   <div
                     style={{
+                      background: "linear-gradient(90deg, #4972e1 0%, #6366f1 100%)",
                       padding: "16px 20px",
-                      fontSize: 14,
-                      color: "#9ca3af",
-                      textAlign: "center",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
                     }}
                   >
-                    No evolutions in this date range.
-                  </div>
-                ) : (
-                  filteredEvolutions.map((evo) => (
-                    <div
-                      key={evo.id}
-                      style={{
-                        padding: "12px 20px",
-                        borderBottom: "1px solid #1f2933",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 500,
-                            color: "#e5e7eb",
-                          }}
-                        >
-                          Level {evo.level} – {evo.form}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#9ca3af",
-                            marginTop: 2,
-                          }}
-                        >
-                          Evolved at {new Date(evo.evolvedAt).toLocaleString()}
-                        </div>
+                    <div>
+                      <h3
+                        style={{
+                          fontSize: 20,
+                          fontWeight: 700,
+                          color: "#fff",
+                          margin: 0,
+                        }}
+                      >
+                        Level {breakdown.level}
+                      </h3>
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "rgba(255, 255, 255, 0.8)",
+                          margin: "4px 0 0 0",
+                        }}
+                      >
+                        {breakdown.tasks.length} task{breakdown.tasks.length !== 1 ? 's' : ''} completed
+                      </p>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div
+                        style={{
+                          fontSize: 16,
+                          fontWeight: 600,
+                          color: "#fff",
+                        }}
+                      >
+                        +{breakdown.totalXP} XP
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "rgba(255, 255, 255, 0.8)",
+                        }}
+                      >
+                        +{breakdown.totalCoins} coins
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
+                  </div>
 
-            <div>
-              <TaskList
-                tasks={stageTasks}
-                title={
-                  selectedEvolutionId
-                    ? "Tasks during this evolution stage"
-                    : "Tasks in selected date range"
-                }
-              />
+                  {/* Tasks List */}
+                  <div style={{ padding: "12px" }}>
+                    {breakdown.tasks.map((task) => (
+                      <div
+                        key={task.id}
+                        style={{
+                          background: "#1f1f1f",
+                          borderRadius: 8,
+                          padding: "12px 16px",
+                          marginBottom: 8,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 500,
+                              color: "#e5e7eb",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {task.title}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#9ca3af",
+                            }}
+                          >
+                            {new Date(task.completedAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 12,
+                            alignItems: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: "#a5b4fc",
+                            }}
+                          >
+                            +{task.xpAwarded} XP
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: "#fbbf24",
+                            }}
+                          >
+                            +{task.coinsAwarded}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

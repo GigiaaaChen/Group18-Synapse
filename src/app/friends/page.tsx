@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -10,6 +11,11 @@ import {
   PetIcon,HistoryIcon,
   SynapseLogo,
 } from "@/components/icons";
+import { useUserXp } from "@/hooks/useUserXp";
+import { usePetData } from "@/hooks/usePetData";
+import { PetDisplay } from "@/components/pet/PetDisplay";
+import { HappinessIcon } from "@/components/pet/PetIcons";
+import { getLevel, getPetStage } from "@/lib/pet";
 
 interface Friend {
   friendshipId: number;
@@ -19,6 +25,7 @@ interface Friend {
   email: string;
   xp: number;
   petHappiness: number;
+  equippedItems: string[];
 }
 
 interface FriendRequest {
@@ -36,6 +43,7 @@ interface SearchResult {
   username: string;
   xp: number;
   petHappiness: number;
+  equippedItems: string[];
 }
 
 export default function FriendsPage() {
@@ -51,7 +59,8 @@ export default function FriendsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
-  const [userXp, setUserXp] = useState((session?.user as any)?.xp ?? 0);
+  const userXp = useUserXp();
+  const petData = usePetData();
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -59,11 +68,6 @@ export default function FriendsPage() {
     }
   }, [session, isPending, router]);
 
-  useEffect(() => {
-    if (session?.user) {
-      setUserXp((session.user as any)?.xp ?? 0);
-    }
-  }, [session]);
 
   const authToken = session?.session?.token;
 
@@ -330,7 +334,7 @@ export default function FriendsPage() {
     return "💀 Critical";
   };
 
-  if (isPending) {
+  if (isPending && !session) {
     return (
       <div
         style={{
@@ -407,8 +411,8 @@ export default function FriendsPage() {
               gap: "4px",
             }}
           >
-            <button
-              onClick={() => router.push("/tasks")}
+            <Link
+              href="/tasks"
               onMouseEnter={() => setHoveredButton("tasks")}
               onMouseLeave={() => setHoveredButton(null)}
               style={{
@@ -417,7 +421,7 @@ export default function FriendsPage() {
                 gap: "12px",
                 padding: "12px 16px",
                 borderRadius: "8px",
-                border: "none",
+                textDecoration: "none",
                 background:
                   hoveredButton === "tasks" ? "#1a1a1a" : "transparent",
                 color: "#9ca3af",
@@ -430,29 +434,31 @@ export default function FriendsPage() {
             >
               <TasksIcon active={false} />
               Tasks
-            </button>
-            <button
+            </Link>
+            <Link
+              href="/friends"
+              aria-current="page"
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
                 padding: "12px 16px",
                 borderRadius: "8px",
-                border: "none",
+                textDecoration: "none",
                 background: "#1a1a1a",
                 color: "#eeeeee",
                 fontSize: "15px",
                 fontWeight: "500",
-                cursor: "pointer",
+                cursor: "default",
                 transition: "all 0.2s ease",
                 textAlign: "left",
               }}
             >
               <FriendsIcon active={true} />
               Friends
-            </button>
-            <button
-              onClick={() => router.push("/pet")}
+            </Link>
+            <Link
+              href="/pet"
               onMouseEnter={() => setHoveredButton("pet")}
               onMouseLeave={() => setHoveredButton(null)}
               style={{
@@ -461,7 +467,7 @@ export default function FriendsPage() {
                 gap: "12px",
                 padding: "12px 16px",
                 borderRadius: "8px",
-                border: "none",
+                textDecoration: "none",
                 background: hoveredButton === "pet" ? "#1a1a1a" : "transparent",
                 color: "#9ca3af",
                 fontSize: "15px",
@@ -473,9 +479,9 @@ export default function FriendsPage() {
             >
               <PetIcon active={false} />
               Pet
-            </button>
-            <button
-              onClick={() => router.push("/history")}
+            </Link>
+            <Link
+              href="/history"
               onMouseEnter={() => setHoveredButton("history")}
               onMouseLeave={() => setHoveredButton(null)}
               style={{
@@ -484,7 +490,7 @@ export default function FriendsPage() {
                 gap: "12px",
                 padding: "12px 16px",
                 borderRadius: "8px",
-                border: "none",
+                textDecoration: "none",
                 background:
                   hoveredButton === "history" ? "#1a1a1a" : "transparent",
                 color: "#9ca3af",
@@ -497,8 +503,122 @@ export default function FriendsPage() {
             >
               <HistoryIcon active={false} />
               History
-            </button>
+            </Link>
           </nav>
+
+          {/* Pet Section */}
+          {petData && (
+            <div
+              style={{
+                margin: "12px",
+                padding: "20px 16px",
+                borderRadius: "16px",
+                background: "linear-gradient(135deg, #1e1e1e 0%, #2a2a2a 100%)",
+                border: "1px solid #3a3a3a",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  marginBottom: "16px",
+                }}
+              >
+                <PetDisplay
+                  equippedItems={petData.equippedItems || []}
+                  stage={petData.stage}
+                  size={140}
+                />
+              </div>
+
+              {/* Happiness Bar */}
+              <div style={{ marginBottom: "12px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "6px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "500",
+                      color: "#9ca3af",
+                    }}
+                  >
+                    Happiness
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <HappinessIcon happiness={petData.happiness} size={14} />
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        color: "#eeeeee",
+                      }}
+                    >
+                      {petData.happiness}/100
+                    </span>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    width: "100%",
+                    height: "6px",
+                    background: "#1a1a1a",
+                    borderRadius: "999px",
+                    overflow: "hidden",
+                    border: "1px solid #2a2a2a",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${petData.happiness}%`,
+                      background:
+                        petData.happiness >= 66
+                          ? "linear-gradient(90deg, #10b981 0%, #059669 100%)"
+                          : petData.happiness >= 33
+                            ? "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)"
+                            : "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)",
+                      borderRadius: "999px",
+                      transition: "all 0.5s ease",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Manage Pet Button */}
+              <Link
+                href="/pet"
+                onMouseEnter={() => setHoveredButton("managepet")}
+                onMouseLeave={() => setHoveredButton(null)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: "6px",
+                  border: "1px solid #3a3a3a",
+                  background:
+                    hoveredButton === "managepet"
+                      ? "linear-gradient(90deg, #4972e1 0%, #6366f1 100%)"
+                      : "#2a2a2a",
+                  color: hoveredButton === "managepet" ? "#ffffff" : "#e5e7eb",
+                  fontSize: "13px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  justifyContent: "center",
+                }}
+              >
+                Manage Pet
+              </Link>
+            </div>
+          )}
 
           {/* User Section */}
           <div
@@ -754,6 +874,7 @@ export default function FriendsPage() {
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
+                            gap: "12px",
                           }}
                         >
                           <div
@@ -764,6 +885,7 @@ export default function FriendsPage() {
                               flex: 1,
                             }}
                           >
+                            {/* Profile Picture */}
                             <div
                               style={{
                                 width: "40px",
@@ -776,6 +898,7 @@ export default function FriendsPage() {
                                 fontSize: "16px",
                                 fontWeight: "700",
                                 color: "#ffffff",
+                                flexShrink: 0,
                               }}
                             >
                               {result.name[0].toUpperCase()}
@@ -794,18 +917,29 @@ export default function FriendsPage() {
                               <div
                                 style={{
                                   fontSize: "13px",
-                                  color: "#888888",
+                                  color: "#9ca3af",
                                   display: "flex",
                                   alignItems: "center",
-                                  gap: "12px",
+                                  gap: "8px",
                                 }}
                               >
-                                <span>@{result.username}</span>
+                                <span style={{ color: "#888888" }}>@{result.username}</span>
                                 <span>•</span>
-                                <span>{result.xp} XP</span>
+                                <span>Lvl {getLevel(result.xp)}</span>
                                 <span>•</span>
-                                <span>{getPetStage(result.petHappiness)}</span>
+                                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                  <HappinessIcon happiness={result.petHappiness} size={12} />
+                                  <span>{result.petHappiness}</span>
+                                </div>
                               </div>
+                            </div>
+                            {/* Pet Display on Right */}
+                            <div style={{ flexShrink: 0 }}>
+                              <PetDisplay
+                                equippedItems={result.equippedItems || []}
+                                stage={getPetStage(getLevel(result.xp))}
+                                size={50}
+                              />
                             </div>
                           </div>
                           <button
@@ -1094,110 +1228,110 @@ export default function FriendsPage() {
                         e.currentTarget.style.transform = "translateY(0)";
                       }}
                     >
+                      {/* Header with Name and Stats */}
                       <div
                         style={{
                           display: "flex",
-                          alignItems: "center",
-                          gap: "16px",
-                          marginBottom: "16px",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          marginBottom: "12px",
                         }}
                       >
-                        <div
-                          style={{
-                            width: "48px",
-                            height: "48px",
-                            borderRadius: "10px",
-                            background: "#4972e1",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "20px",
-                            fontWeight: "700",
-                            color: "#ffffff",
-                          }}
-                        >
-                          {friend.name[0].toUpperCase()}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
+                        <div>
                           <div
                             style={{
-                              fontSize: "18px",
+                              fontSize: "16px",
                               fontWeight: "600",
                               color: "#eeeeee",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
+                              marginBottom: "2px",
                             }}
                           >
                             {friend.name}
                           </div>
                           <div
                             style={{
-                              fontSize: "14px",
+                              fontSize: "13px",
                               color: "#888888",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
                             }}
                           >
                             @{friend.username}
                           </div>
                         </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              color: "#9ca3af",
+                              marginBottom: "2px",
+                            }}
+                          >
+                            Level {getLevel(friend.xp)}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: "600",
+                              color: "#a5b4fc",
+                            }}
+                          >
+                            {friend.xp} XP
+                          </div>
+                        </div>
                       </div>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "12px",
-                          marginBottom: "16px",
-                        }}
-                      >
+                      {/* Pet Display */}
+                      <div style={{ marginBottom: "12px" }}>
+                        <PetDisplay
+                          equippedItems={friend.equippedItems || []}
+                          stage={getPetStage(getLevel(friend.xp))}
+                          size={120}
+                        />
+                      </div>
+
+                      {/* Happiness Bar */}
+                      <div style={{ marginBottom: "12px" }}>
                         <div
                           style={{
                             display: "flex",
-                            alignItems: "center",
                             justifyContent: "space-between",
-                            padding: "12px",
-                            borderRadius: "8px",
-                            background: "#1a1a1a",
+                            alignItems: "center",
+                            marginBottom: "6px",
                           }}
                         >
-                          <span style={{ fontSize: "14px", color: "#9ca3af" }}>
-                            XP
+                          <span style={{ fontSize: "12px", fontWeight: "500", color: "#9ca3af" }}>
+                            Happiness
                           </span>
-                          <span
-                            style={{
-                              fontSize: "16px",
-                              fontWeight: "600",
-                              color: "#eeeeee",
-                            }}
-                          >
-                            {friend.xp}
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <HappinessIcon happiness={friend.petHappiness} size={14} />
+                            <span style={{ fontSize: "12px", fontWeight: "600", color: "#eeeeee" }}>
+                              {friend.petHappiness}/100
+                            </span>
+                          </div>
                         </div>
                         <div
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "12px",
-                            borderRadius: "8px",
+                            width: "100%",
+                            height: "6px",
                             background: "#1a1a1a",
+                            borderRadius: "999px",
+                            overflow: "hidden",
+                            border: "1px solid #2a2a2a",
                           }}
                         >
-                          <span style={{ fontSize: "14px", color: "#9ca3af" }}>
-                            Pet Status
-                          </span>
-                          <span
+                          <div
                             style={{
-                              fontSize: "14px",
-                              fontWeight: "500",
-                              color: "#eeeeee",
+                              height: "100%",
+                              width: `${friend.petHappiness}%`,
+                              background:
+                                friend.petHappiness >= 66
+                                  ? "linear-gradient(90deg, #10b981 0%, #059669 100%)"
+                                  : friend.petHappiness >= 33
+                                    ? "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)"
+                                    : "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)",
+                              borderRadius: "999px",
+                              transition: "all 0.5s ease",
                             }}
-                          >
-                            {getPetStage(friend.petHappiness)}
-                          </span>
+                          />
                         </div>
                       </div>
 

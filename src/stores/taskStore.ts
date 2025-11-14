@@ -5,6 +5,7 @@ import type { Task, TaskDraft } from "@/types/task";
 interface TaskStore {
   tasks: Task[];
   isLoading: boolean;
+  isRefreshing: boolean;
   error: string | null;
   fetchTasks: (token: string) => Promise<void>;
   addTask: (task: TaskDraft, token: string) => Promise<void>;
@@ -47,12 +48,18 @@ const parseTask = (task: Task): Task => ({
 export const useTaskStore = create<TaskStore>((set, get) => ({
   tasks: [],
   isLoading: false,
+  isRefreshing: false,
   error: null,
 
   setError: (message) => set({ error: message }),
 
   fetchTasks: async (token) => {
-    set({ isLoading: true, error: null });
+    const hasExistingTasks = get().tasks.length > 0;
+    set({
+      isLoading: !hasExistingTasks,
+      isRefreshing: hasExistingTasks,
+      error: null,
+    });
 
     try {
       const response = await fetch(API_BASE, {
@@ -69,7 +76,12 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       }
 
       const data = (await response.json()) as Task[];
-      set({ tasks: data.map(parseTask), isLoading: false, error: null });
+      set({
+        tasks: data.map(parseTask),
+        isLoading: false,
+        isRefreshing: false,
+        error: null,
+      });
     } catch (error) {
       set({
         error:
@@ -77,6 +89,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
             ? error.message
             : "Failed to load tasks. Please try again.",
         isLoading: false,
+        isRefreshing: false,
       });
     }
   },

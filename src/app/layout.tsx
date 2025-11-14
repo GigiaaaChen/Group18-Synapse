@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tamagotchi Task Manager",
+  title: "Synapse | Tamagotchi Tasks",
   description: "Keep your tasks alive and happy!",
 };
 

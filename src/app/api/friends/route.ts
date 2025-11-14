@@ -20,7 +20,8 @@ export const GET = async (request: NextRequest) => {
           u."username",
           u."email",
           u."xp",
-          u."petHappiness"
+          p."equippedItems",
+          calculate_pet_happiness(u."id") as "petHappiness"
         FROM "friendship" f
         INNER JOIN "user" u ON (
           CASE
@@ -28,6 +29,7 @@ export const GET = async (request: NextRequest) => {
             WHEN f."friendId" = $1 THEN u."id" = f."userId"
           END
         )
+        LEFT JOIN "pet" p ON p."userId" = u."id"
         WHERE (f."userId" = $1 OR f."friendId" = $1)
           AND f."status" = 'accepted'
         ORDER BY u."name" ASC

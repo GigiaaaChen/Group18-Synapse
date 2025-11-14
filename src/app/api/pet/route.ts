@@ -1,47 +1,68 @@
-// src/app/api/pet/route.ts
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db"; 
+import { db } from "@/lib/db";
+import { requireUser, UnauthorizedError } from "@/lib/session";
+import { getLevelProgress, getPetStage } from "@/lib/pet";
 
-export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
+export const GET = async (request: NextRequest) => {
+	try {
+		const user = await requireUser(request);
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Missing userId" },
-        { status: 400 }
-      );
-    }
+		// Get user XP
+		const userResult = await db.query(`SELECT xp FROM "user" WHERE id = $1`, [
+			user.id,
+		]);
 
-    // get current XP from the user table
-    const result = await db.query(
-      `SELECT xp FROM "user" WHERE id = $1`,
-      [userId]
-    );
+		if (userResult.rows.length === 0) {
+			return NextResponse.json({ error: "User not found" }, { status: 404 });
+		}
 
-    if (result.rows.length === 0) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
+		const { xp } = userResult.rows[0];
 
-    const xp = result.rows[0].xp ?? 0;
+		// Get or create pet record
+		const petResult = await db.query(
+			`
+      INSERT INTO pet (id, "userId", coins)
+      VALUES (gen_random_uuid()::text, $1, 0)
+      ON CONFLICT ("userId")
+      DO UPDATE SET "userId" = EXCLUDED."userId"
+      RETURNING coins, "equippedItems"
+    `,
+			[user.id],
+		);
 
-    // general pet state shape 
-    return NextResponse.json({
-      userId,
-      xp,
-      petState: {
-        xp,
-      },
-    });
-  } catch (err) {
-    console.error("Error in /api/pet:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
+		const { coins, equippedItems } = petResult.rows[0];
+
+		// Calculate happiness using PostgreSQL function
+		const happinessResult = await db.query(
+			`SELECT calculate_pet_happiness($1) as happiness`,
+			[user.id],
+		);
+		const happiness = happinessResult.rows[0]?.happiness || 100;
+
+		// Calculate level and progress
+		const levelProgress = getLevelProgress(xp || 0);
+		const stage = getPetStage(levelProgress.level);
+
+		return NextResponse.json({
+			level: levelProgress.level,
+			xp: xp || 0,
+			currentXP: levelProgress.currentXP,
+			maxXP: levelProgress.maxXP,
+			percentage: levelProgress.percentage,
+			stage,
+			coins: coins || 0,
+			happiness,
+			equippedItems: equippedItems || [],
+		});
+	} catch (error) {
+		if (error instanceof UnauthorizedError) {
+			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+		}
+		console.error("Failed to fetch pet data:", error);
+		return NextResponse.json(
+			{ error: "Failed to fetch pet data" },
+			{ status: 500 },
+		);
+	}
+};

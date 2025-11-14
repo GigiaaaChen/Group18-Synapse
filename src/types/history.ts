@@ -1,13 +1,15 @@
 export type Evolution = {
   id: string;
-  level: number;          
-  form: string;          
-  evolvedAt: string;      
+  level: number;
+  form: string;
+  evolvedAt: string;
 };
 
 // Completed tasks
 export type Task = {
   id: string;
   title: string;
-  completedAt: string;   
+  completedAt: string;
+  xpAwarded: number;
+  coinsAwarded: number;
 };

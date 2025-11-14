@@ -22,8 +22,10 @@ export const GET = async (request: NextRequest) => {
           u."name",
           u."username",
           u."xp",
-          u."petHappiness"
+          p."equippedItems",
+          calculate_pet_happiness(u."id") as "petHappiness"
         FROM "user" u
+        LEFT JOIN "pet" p ON p."userId" = u."id"
         WHERE u."username" ILIKE $1
           AND u."id" != $2
           AND NOT EXISTS (

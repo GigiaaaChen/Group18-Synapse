@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -13,6 +14,10 @@ import {
   HistoryIcon,
 } from "@/components/icons";
 import { SlidingNumber } from "@/components/SlidingNumber";
+import { useUserXp } from "@/hooks/useUserXp";
+import { usePetData } from "@/hooks/usePetData";
+import { PetDisplay } from "@/components/pet/PetDisplay";
+import { HappinessIcon } from "@/components/pet/PetIcons";
 
 const TASK_DISMISS_PREFIX = "taskNotificationDismissed_";
 
@@ -20,6 +25,8 @@ export default function TaskPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
   const tasks = useTaskStore((state) => state.tasks);
+  const userXp = useUserXp();
+  const petData = usePetData();
 
   const [dismissedToday, setDismissedToday] = useState<Set<string>>(new Set());
 
@@ -109,6 +116,7 @@ export default function TaskPage() {
   const showNotification = upcomingDueTasks.length > 0;
 
   const isLoadingTasks = useTaskStore((state) => state.isLoading);
+  const isRefreshingTasks = useTaskStore((state) => state.isRefreshing);
   const taskError = useTaskStore((state) => state.error);
   const fetchTasks = useTaskStore((state) => state.fetchTasks);
   const addTask = useTaskStore((state) => state.addTask);
@@ -128,11 +136,6 @@ export default function TaskPage() {
   >("all");
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-
-  const [userXp, setUserXp] = useState<number>(() => {
-    const xp = (session?.user as any)?.xp;
-    return typeof xp === "number" ? xp : 0;
-  });
 
   const [activeTimer, setActiveTimer] = useState<{
     id: string;
@@ -163,12 +166,6 @@ export default function TaskPage() {
     fetchTasks(authToken).catch(() => {});
   }, [authToken, fetchTasks]);
 
-  useEffect(() => {
-    const xp = (session?.user as any)?.xp;
-    if (typeof xp === "number") {
-      setUserXp(xp);
-    }
-  }, [session?.user]);
 
   // Fetch active timer and total times on mount
   useEffect(() => {
@@ -318,23 +315,6 @@ export default function TaskPage() {
     try {
       setError(null);
 
-      // Figure out how much XP this task is worth (same logic as toggle)
-      let xpChange = 0;
-      if (task.completed) {
-        const dueDate = task.dueDate ? new Date(task.dueDate) : null;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        xpChange = 10; // default on-time / no due date
-        if (dueDate) {
-          const due = new Date(dueDate);
-          due.setHours(0, 0, 0, 0);
-          if (today > due) {
-            xpChange = 5; // late
-          }
-        }
-      }
-
       const response = await fetch(`/api/tasks/${task.id}`, {
         method: "DELETE",
         headers: {
@@ -343,11 +323,6 @@ export default function TaskPage() {
       });
 
       if (response.ok) {
-        // Update XP in UI: deleting a completed task removes its XP
-        if (task.completed && xpChange > 0) {
-          setUserXp((prev: number) => Math.max(0, prev - xpChange));
-        }
-
         // Refresh tasks so the deleted one disappears
         await fetchTasks(authToken);
       } else {
@@ -528,7 +503,7 @@ export default function TaskPage() {
     }
   };
 
-  if (isPending) {
+  if (isPending && !session) {
     return (
       <div
         style={{
@@ -549,6 +524,8 @@ export default function TaskPage() {
   if (!session) {
     return null;
   }
+
+  const visibleTasks = filteredTasks();
 
   return (
     <div
@@ -599,14 +576,16 @@ export default function TaskPage() {
             gap: "4px",
           }}
         >
-          <button
+          <Link
+            href="/tasks"
+            aria-current="page"
             style={{
               display: "flex",
               alignItems: "center",
               gap: "12px",
               padding: "12px 16px",
               borderRadius: "8px",
-              border: "none",
+              textDecoration: "none",
               background: "#1a1a1a",
               color: "#eeeeee",
               fontSize: "15px",
@@ -618,9 +597,9 @@ export default function TaskPage() {
           >
             <TasksIcon active={true} />
             Tasks
-          </button>
-          <button
-            onClick={() => router.push("/friends")}
+          </Link>
+          <Link
+            href="/friends"
             onMouseEnter={() => setHoveredButton("friends")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
@@ -629,7 +608,7 @@ export default function TaskPage() {
               gap: "12px",
               padding: "12px 16px",
               borderRadius: "8px",
-              border: "none",
+              textDecoration: "none",
               background:
                 hoveredButton === "friends" ? "#1a1a1a" : "transparent",
               color: "#9ca3af",
@@ -642,9 +621,9 @@ export default function TaskPage() {
           >
             <FriendsIcon active={false} />
             Friends
-          </button>
-          <button
-            onClick={() => router.push("/pet")}
+          </Link>
+          <Link
+            href="/pet"
             onMouseEnter={() => setHoveredButton("pet")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
@@ -653,7 +632,7 @@ export default function TaskPage() {
               gap: "12px",
               padding: "12px 16px",
               borderRadius: "8px",
-              border: "none",
+              textDecoration: "none",
               background: hoveredButton === "pet" ? "#1a1a1a" : "transparent",
               color: "#9ca3af",
               fontSize: "15px",
@@ -665,9 +644,9 @@ export default function TaskPage() {
           >
             <PetIcon active={false} />
             Pet
-          </button>
-          <button
-            onClick={() => router.push("/history")}
+          </Link>
+          <Link
+            href="/history"
             onMouseEnter={() => setHoveredButton("history")}
             onMouseLeave={() => setHoveredButton(null)}
             style={{
@@ -676,7 +655,7 @@ export default function TaskPage() {
               gap: "12px",
               padding: "12px 16px",
               borderRadius: "8px",
-              border: "none",
+              textDecoration: "none",
               background:
                 hoveredButton === "history" ? "#1a1a1a" : "transparent",
               color: "#9ca3af",
@@ -689,8 +668,122 @@ export default function TaskPage() {
           >
             <HistoryIcon active={false} />
             History
-          </button>
+          </Link>
         </nav>
+
+        {/* Pet Section */}
+        {petData && (
+          <div
+            style={{
+              margin: "12px",
+              padding: "20px 16px",
+              borderRadius: "16px",
+              background: "linear-gradient(135deg, #1e1e1e 0%, #2a2a2a 100%)",
+              border: "1px solid #3a3a3a",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <PetDisplay
+                equippedItems={petData.equippedItems || []}
+                stage={petData.stage}
+                size={140}
+              />
+            </div>
+
+            {/* Happiness Bar */}
+            <div style={{ marginBottom: "12px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "6px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "500",
+                    color: "#9ca3af",
+                  }}
+                >
+                  Happiness
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <HappinessIcon happiness={petData.happiness} size={14} />
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      color: "#eeeeee",
+                    }}
+                  >
+                    {petData.happiness}/100
+                  </span>
+                </div>
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: "6px",
+                  background: "#1a1a1a",
+                  borderRadius: "999px",
+                  overflow: "hidden",
+                  border: "1px solid #2a2a2a",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${petData.happiness}%`,
+                    background:
+                      petData.happiness >= 66
+                        ? "linear-gradient(90deg, #10b981 0%, #059669 100%)"
+                        : petData.happiness >= 33
+                          ? "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)"
+                          : "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)",
+                    borderRadius: "999px",
+                    transition: "all 0.5s ease",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Manage Pet Button */}
+            <Link
+              href="/pet"
+              onMouseEnter={() => setHoveredButton("managepet")}
+              onMouseLeave={() => setHoveredButton(null)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "6px",
+                border: "1px solid #3a3a3a",
+                background:
+                  hoveredButton === "managepet"
+                    ? "linear-gradient(90deg, #4972e1 0%, #6366f1 100%)"
+                    : "#2a2a2a",
+                color: hoveredButton === "managepet" ? "#ffffff" : "#e5e7eb",
+                fontSize: "13px",
+                fontWeight: "500",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                textDecoration: "none",
+                display: "inline-flex",
+                justifyContent: "center",
+              }}
+            >
+              Manage Pet
+            </Link>
+          </div>
+        )}
 
         {/* User Section */}
         <div
@@ -918,12 +1011,101 @@ export default function TaskPage() {
                 marginBottom: "20px",
               }}
             >
-              Create New Task
+              Create New {isGoal ? "Goal" : "Task"}
             </h2>
+
+            {/* Task/Goal Toggle */}
+            <div style={{ marginBottom: "16px" }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  background: "#1a1a1a",
+                  borderRadius: "10px",
+                  padding: "4px",
+                  gap: "4px",
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setIsGoal(false);
+                    setGoalFrequency("");
+                  }}
+                  style={{
+                    padding: "10px 24px",
+                    borderRadius: "7px",
+                    border: "none",
+                    background: !isGoal
+                      ? "#4972e1"
+                      : "transparent",
+                    color: !isGoal ? "#ffffff" : "#9ca3af",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 11l3 3L22 4" />
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                  Task
+                </button>
+                <button
+                  onClick={() => {
+                    setIsGoal(true);
+                    setTaskDate("");
+                  }}
+                  style={{
+                    padding: "10px 24px",
+                    borderRadius: "7px",
+                    border: "none",
+                    background: isGoal
+                      ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                      : "transparent",
+                    color: isGoal ? "#ffffff" : "#9ca3af",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="8" r="7" />
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+                  </svg>
+                  Goal
+                </button>
+              </div>
+            </div>
+
             <div style={{ display: "grid", gap: "16px" }}>
               <input
                 type="text"
-                placeholder="What do you need to do?"
+                placeholder={isGoal ? "What goal do you want to achieve?" : "What do you need to do?"}
                 value={taskTitle}
                 onChange={(e) => setTaskTitle(e.target.value)}
                 onKeyDown={(e) => {
@@ -933,7 +1115,7 @@ export default function TaskPage() {
                   width: "100%",
                   padding: "14px 16px",
                   borderRadius: "8px",
-                  border: "1px solid #2a2a2a",
+                  border: `1px solid ${isGoal ? "rgba(16, 185, 129, 0.3)" : "#2a2a2a"}`,
                   background: "#161616",
                   color: "#eeeeee",
                   fontSize: "15px",
@@ -941,109 +1123,83 @@ export default function TaskPage() {
                   transition: "all 0.2s ease",
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = "#6366f1";
-                  e.target.style.boxShadow =
-                    "0 0 0 3px rgba(99, 102, 241, 0.1)";
+                  e.target.style.borderColor = isGoal ? "#10b981" : "#6366f1";
+                  e.target.style.boxShadow = isGoal
+                    ? "0 0 0 3px rgba(16, 185, 129, 0.1)"
+                    : "0 0 0 3px rgba(99, 102, 241, 0.1)";
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = "#2a2a2a";
+                  e.target.style.borderColor = isGoal ? "rgba(16, 185, 129, 0.3)" : "#2a2a2a";
                   e.target.style.boxShadow = "none";
                 }}
               />
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gridTemplateColumns: isGoal ? "1fr 1fr auto" : "1fr 1fr auto",
                   gap: "12px",
                 }}
               >
-                <input
-                  type="date"
-                  className="white-calendar"
-                  value={taskDate}
-                  onChange={(e) => setTaskDate(e.target.value)}
-                  disabled={isGoal} // NEW: block due date when it's a goal
-                  style={{
-                    padding: "14px 16px",
-                    borderRadius: "8px",
-                    border: "1px solid #2a2a2a",
-                    background: isGoal ? "#111827" : "#161616",
-                    color: "#eeeeee",
-                    fontSize: "14px",
-                    outline: "none",
-                    transition: "all 0.2s ease",
-                    opacity: isGoal ? 0.5 : 1,
-                    cursor: isGoal ? "not-allowed" : "pointer",
-                  }}
-                  onFocus={(e) => {
-                    if (isGoal) return;
-                    e.target.style.borderColor = "#6366f1";
-                    e.target.style.boxShadow =
-                      "0 0 0 3px rgba(99, 102, 241, 0.1)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "#2a2a2a";
-                    e.target.style.boxShadow = "none";
-                  }}
-                />
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <label
+                {!isGoal ? (
+                  <input
+                    type="date"
+                    className="white-calendar"
+                    value={taskDate}
+                    onChange={(e) => setTaskDate(e.target.value)}
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
+                      padding: "14px 16px",
+                      borderRadius: "8px",
+                      border: "1px solid #2a2a2a",
+                      background: "#161616",
+                      color: "#eeeeee",
                       fontSize: "14px",
-                      color: "#e5e7eb",
+                      outline: "none",
+                      transition: "all 0.2s ease",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "#6366f1";
+                      e.target.style.boxShadow =
+                        "0 0 0 3px rgba(99, 102, 241, 0.1)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "#2a2a2a";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  />
+                ) : (
+                  <select
+                    value={goalFrequency}
+                    onChange={(e) =>
+                      setGoalFrequency(
+                        e.target.value as "daily" | "weekly" | ""
+                      )
+                    }
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(16, 185, 129, 0.3)",
+                      background: "#161616",
+                      color: "#eeeeee",
+                      fontSize: "14px",
+                      outline: "none",
                       cursor: "pointer",
+                      transition: "all 0.2s ease",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "#10b981";
+                      e.target.style.boxShadow =
+                        "0 0 0 3px rgba(16, 185, 129, 0.1)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "rgba(16, 185, 129, 0.3)";
+                      e.target.style.boxShadow = "none";
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isGoal}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setIsGoal(checked);
-                        if (checked) {
-                          setTaskDate("");
-                        } else {
-                          setGoalFrequency("");
-                        }
-                      }}
-                    />
-                    Set as goal
-                  </label>
-                  {isGoal && (
-                    <select
-                      value={goalFrequency}
-                      onChange={(e) =>
-                        setGoalFrequency(
-                          e.target.value as "daily" | "weekly" | ""
-                        )
-                      }
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: "8px",
-                        border: "1px solid #2a2a2a",
-                        background: "#161616",
-                        color: "#eeeeee",
-                        fontSize: "14px",
-                        outline: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <option value="">Frequency</option>
-                      <option value="daily">Daily goal</option>
-                      <option value="weekly">Weekly goal</option>
-                    </select>
-                  )}
-                </div>
+                    <option value="">Select Frequency</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                )}
 
                 <select
                   value={taskCategory}
@@ -1051,7 +1207,7 @@ export default function TaskPage() {
                   style={{
                     padding: "14px 16px",
                     borderRadius: "8px",
-                    border: "1px solid #2a2a2a",
+                    border: `1px solid ${isGoal ? "rgba(16, 185, 129, 0.3)" : "#2a2a2a"}`,
                     background: "#161616",
                     color: "#eeeeee",
                     fontSize: "14px",
@@ -1060,12 +1216,13 @@ export default function TaskPage() {
                     transition: "all 0.2s ease",
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "#6366f1";
-                    e.target.style.boxShadow =
-                      "0 0 0 3px rgba(99, 102, 241, 0.1)";
+                    e.target.style.borderColor = isGoal ? "#10b981" : "#6366f1";
+                    e.target.style.boxShadow = isGoal
+                      ? "0 0 0 3px rgba(16, 185, 129, 0.1)"
+                      : "0 0 0 3px rgba(99, 102, 241, 0.1)";
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = "#2a2a2a";
+                    e.target.style.borderColor = isGoal ? "rgba(16, 185, 129, 0.3)" : "#2a2a2a";
                     e.target.style.boxShadow = "none";
                   }}
                 >
@@ -1079,11 +1236,16 @@ export default function TaskPage() {
                   onMouseEnter={() => setHoveredButton("create-task")}
                   onMouseLeave={() => setHoveredButton(null)}
                   style={{
-                    padding: "14px 24px",
+                    padding: "14px 28px",
                     borderRadius: "8px",
                     border: "none",
-                    background:
-                      hoveredButton === "create-task" ? "#91aaed" : "#4972e1",
+                    background: isGoal
+                      ? hoveredButton === "create-task"
+                        ? "linear-gradient(135deg, #059669 0%, #047857 100%)"
+                        : "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                      : hoveredButton === "create-task"
+                        ? "#91aaed"
+                        : "#4972e1",
                     color: "#ffffff",
                     fontSize: "14px",
                     fontWeight: "600",
@@ -1091,15 +1253,20 @@ export default function TaskPage() {
                     transition: "all 0.2s ease",
                     boxShadow:
                       hoveredButton === "create-task"
-                        ? "0 8px 16px rgba(73, 114, 225, 0.3)"
-                        : "0 4px 12px rgba(73, 114, 225, 0.2)",
+                        ? isGoal
+                          ? "0 8px 16px rgba(16, 185, 129, 0.3)"
+                          : "0 8px 16px rgba(73, 114, 225, 0.3)"
+                        : isGoal
+                          ? "0 4px 12px rgba(16, 185, 129, 0.2)"
+                          : "0 4px 12px rgba(73, 114, 225, 0.2)",
                     transform:
                       hoveredButton === "create-task"
                         ? "translateY(-1px)"
                         : "translateY(0)",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  Add Task/Goal
+                  {isGoal ? "Create Goal" : "Add Task"}
                 </button>
               </div>
             </div>
@@ -1278,11 +1445,36 @@ export default function TaskPage() {
                 )}
               </button>
             </div>
-          </div>
+        </div>
 
-          {/* Table */}
+        {isRefreshingTasks && (
           <div
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: "#9ca3af",
+              fontSize: "12px",
+              padding: "0 4px 12px",
+            }}
+          >
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "9999px",
+                background:
+                  "linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)",
+                boxShadow: "0 0 6px rgba(99, 102, 241, 0.6)",
+              }}
+            />
+            Syncing latest tasks...
+          </div>
+        )}
+
+        {/* Table */}
+        <div
+          style={{
               borderRadius: "12px",
               border: "1px solid #2a2a2a",
               background: "#161616",
@@ -1429,7 +1621,7 @@ export default function TaskPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoadingTasks ? (
+                  {isLoadingTasks && tasks.length === 0 ? (
                     <tr>
                       <td
                         colSpan={8}
@@ -1443,7 +1635,7 @@ export default function TaskPage() {
                         Loading tasks...
                       </td>
                     </tr>
-                  ) : filteredTasks().length === 0 ? (
+                  ) : visibleTasks.length === 0 ? (
                     <tr>
                       <td
                         colSpan={8}
@@ -1458,7 +1650,7 @@ export default function TaskPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredTasks().map((task) => (
+                    visibleTasks.map((task) => (
                       <tr
                         key={task.id}
                         onMouseEnter={() => setHoveredRow(task.id)}
@@ -1481,15 +1673,6 @@ export default function TaskPage() {
                                   () => {}
                                 );
 
-                                const xpChange = getXpChangeForCompletion(task);
-
-                                if (!wasCompleted) {
-                                  setUserXp((prev: number) => prev + xpChange);
-                                } else {
-                                  setUserXp((prev: number) =>
-                                    Math.max(0, prev - xpChange)
-                                  );
-                                }
                               }}
                               style={{
                                 width: "20px",
@@ -1550,39 +1733,7 @@ export default function TaskPage() {
                             fontSize: "14px",
                           }}
                         >
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "4px",
-                            }}
-                          >
-                            <span>{task.title}</span>
-                            {task.isGoal && (
-                              <span
-                                style={{
-                                  alignSelf: "flex-start",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  padding: "2px 8px",
-                                  borderRadius: "999px",
-                                  fontSize: "11px",
-                                  fontWeight: 500,
-                                  background: "rgba(52, 211, 153, 0.1)",
-                                  border: "1px solid rgba(52, 211, 153, 0.6)",
-                                  color: "#6ee7b7",
-                                  textTransform: "capitalize",
-                                }}
-                              >
-                                Goal ·{" "}
-                                {task.goalFrequency === "daily"
-                                  ? "daily"
-                                  : task.goalFrequency === "weekly"
-                                    ? "weekly"
-                                    : "unspecified"}
-                              </span>
-                            )}
-                          </div>
+                          {task.title}
                         </td>
 
                         <td style={{ padding: "12px 16px" }}>
@@ -1690,12 +1841,39 @@ export default function TaskPage() {
                         >
                           {task.isGoal ? (
                             <span
-                              style={{ fontSize: "13px", color: "#e5e7eb" }}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "4px 12px",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                background:
+                                  "linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%)",
+                                border: "1px solid rgba(16, 185, 129, 0.4)",
+                                color: "#6ee7b7",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                              }}
                             >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <circle cx="12" cy="8" r="7" />
+                                <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+                              </svg>
                               {task.goalFrequency === "daily"
-                                ? "Daily goal"
+                                ? "Daily Goal"
                                 : task.goalFrequency === "weekly"
-                                  ? "Weekly goal"
+                                  ? "Weekly Goal"
                                   : "Goal"}
                             </span>
                           ) : editingDueDate === task.id ? (
@@ -1799,18 +1977,6 @@ export default function TaskPage() {
                                 }
 
                                 if (wasCompleted !== nowCompleted) {
-                                  const xpChange =
-                                    getXpChangeForCompletion(task);
-
-                                  if (!wasCompleted && nowCompleted) {
-                                    setUserXp(
-                                      (prev: number) => prev + xpChange
-                                    );
-                                  } else if (wasCompleted && !nowCompleted) {
-                                    setUserXp((prev: number) =>
-                                      Math.max(0, prev - xpChange)
-                                    );
-                                  }
                                 }
                               }}
                               onMouseEnter={() =>
@@ -1907,18 +2073,6 @@ export default function TaskPage() {
                                   return;
                                 }
                                 if (wasCompleted !== nowCompleted) {
-                                  const xpChange =
-                                    getXpChangeForCompletion(task);
-
-                                  if (!wasCompleted && nowCompleted) {
-                                    setUserXp(
-                                      (prev: number) => prev + xpChange
-                                    );
-                                  } else if (wasCompleted && !nowCompleted) {
-                                    setUserXp((prev: number) =>
-                                      Math.max(0, prev - xpChange)
-                                    );
-                                  }
                                 }
                               }}
                               onMouseEnter={() =>
